@@ -45,6 +45,7 @@ class SearchRequest(BaseModel):
     query: str
     limit: int = 10
     llm_provider: Optional[str] = "local"  # "local", "cloud", or "deepseek"
+    source_filter: Optional[str] = None  # "pdf", "forum", or None (all sources)
 
 
 class SearchResponse(BaseModel):
@@ -104,6 +105,10 @@ def get_collection():
 async def lifespan(app: FastAPI):
     # Startup logic
     get_collection()
+    
+    # Initialize PDF database tables
+    import pdf_schema
+    pdf_schema.init_pdf_tables()
     yield
     # Shutdown logic (if any)
     pass
@@ -296,11 +301,18 @@ def search(request: SearchRequest):
         raise HTTPException(status_code=500, detail="Search engine not initialized (Model downloading?)")
 
     try:
-        # 1. Vector Search
-        results = col.query(
-            query_texts=[request.query],
-            n_results=request.limit
-        )
+        # 1. Vector Search with optional source filter
+        query_params = {
+            "query_texts": [request.query],
+            "n_results": request.limit
+        }
+
+        # Add metadata filter if source_filter is specified
+        if request.source_filter:
+            query_params["where"] = {"source": request.source_filter}
+            logger.info(f"Searching with source filter: {request.source_filter}")
+
+        results = col.query(**query_params)
 
         sources = []
         context_text = ""
@@ -413,11 +425,18 @@ async def search_stream(request: SearchRequest):
         raise HTTPException(status_code=500, detail="Search engine not initialized (Model downloading?)")
 
     try:
-        # 1. Vector Search
-        results = col.query(
-            query_texts=[request.query],
-            n_results=request.limit
-        )
+        # 1. Vector Search with optional source filter
+        query_params = {
+            "query_texts": [request.query],
+            "n_results": request.limit
+        }
+
+        # Add metadata filter if source_filter is specified
+        if request.source_filter:
+            query_params["where"] = {"source": request.source_filter}
+            logger.info(f"Searching with source filter: {request.source_filter}")
+
+        results = col.query(**query_params)
 
         sources = []
         context_text = ""
@@ -539,9 +558,9 @@ async def search_stream(request: SearchRequest):
 
 # ==================== PDF Management Routes ====================
 
-# Initialize PDF tables on startup
+# Initialize PDF tables on startup - Moved to lifespan
 from pdf_schema import init_pdf_tables
-init_pdf_tables()
+
 
 
 @app.get("/pdf/list", response_model=List[dict])

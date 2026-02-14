@@ -23,3 +23,6 @@ tenacity>=8.2.0
 
 # LLM Integration (Optional)
 openai>=1.0.0
+
+# PDF Processing
+pymupdf>=1.23.0

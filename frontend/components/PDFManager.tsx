@@ -13,8 +13,17 @@ interface PDFDocument {
     total_chunks: number;
     upload_date: string;
     last_indexed: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed';
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'partial';
     error: string | null;
+}
+
+interface Progress {
+    current: number;
+    total: number;
+    chunks: number;
+    speed: number;
+    percentage: number;
+    eta?: number;  // 预计剩余时间（秒）
 }
 
 export default function PDFManager() {
@@ -24,6 +33,7 @@ export default function PDFManager() {
     const [activeIndexing, setActiveIndexing] = useState<Record<number, boolean>>({});
     const [indexLogs, setIndexLogs] = useState<Record<number, string[]>>({});
     const [expandedLogs, setExpandedLogs] = useState<Record<number, boolean>>({});
+    const [indexProgress, setIndexProgress] = useState<Record<number, Progress>>({});
 
     const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -84,6 +94,7 @@ export default function PDFManager() {
         setActiveIndexing(prev => ({ ...prev, [pdfId]: true }));
         setIndexLogs(prev => ({ ...prev, [pdfId]: ["Starting indexing..."] }));
         setExpandedLogs(prev => ({ ...prev, [pdfId]: true }));
+        setIndexProgress(prev => ({ ...prev, [pdfId]: { current: 0, total: 0, chunks: 0, speed: 0, percentage: 0 } }));
 
         try {
             // Start indexing
@@ -100,9 +111,23 @@ export default function PDFManager() {
                         ...prev,
                         [pdfId]: [...(prev[pdfId] || []), data.message]
                     }));
+                } else if (data.type === 'progress') {
+                    // 接收结构化进度数据
+                    setIndexProgress(prev => ({
+                        ...prev,
+                        [pdfId]: {
+                            current: data.current,
+                            total: data.total,
+                            chunks: data.chunks,
+                            speed: data.speed,
+                            percentage: data.percentage,
+                            eta: data.eta
+                        }
+                    }));
                 } else if (data.type === 'status' && data.message === 'finished') {
                     eventSource.close();
                     setActiveIndexing(prev => ({ ...prev, [pdfId]: false }));
+                    setIndexProgress(prev => ({ ...prev, [pdfId]: { ...prev[pdfId], percentage: 100 } }));
                     fetchPDFs(); // Refresh list
                 } else if (data.type === 'status' && data.message === 'error') {
                     eventSource.close();
@@ -152,6 +177,8 @@ export default function PDFManager() {
                 return <RefreshCw className="text-blue-400 animate-spin" size={18} />;
             case 'failed':
                 return <XCircle className="text-red-400" size={18} />;
+            case 'partial':
+                return <AlertCircle className="text-orange-400" size={18} />;
             default:
                 return <AlertCircle className="text-yellow-400" size={18} />;
         }
@@ -207,6 +234,7 @@ export default function PDFManager() {
                             const isIndexing = activeIndexing[pdf.id];
                             const logs = indexLogs[pdf.id] || [];
                             const isExpanded = expandedLogs[pdf.id];
+                            const progress = indexProgress[pdf.id];
 
                             return (
                                 <div key={pdf.id} className="bg-neutral-900/50 rounded-lg border border-neutral-800 overflow-hidden">
@@ -225,11 +253,52 @@ export default function PDFManager() {
                                                     <span>{pdf.total_chunks || '?'} chunks</span>
                                                     <span>{formatFileSize(pdf.file_size)}</span>
                                                     {pdf.status === 'completed' && (
-                                                        <span className="text-green-400">Indexed</span>
+                                                        <span className="text-green-400">✅ Indexed</span>
+                                                    )}
+                                                    {pdf.status === 'partial' && (
+                                                        <span className="text-orange-400">⚠️ Partially Indexed</span>
                                                     )}
                                                 </div>
                                                 {pdf.error && (
                                                     <p className="text-xs text-red-400 mt-1">{pdf.error}</p>
+                                                )}
+
+                                                {/* Progress Section */}
+                                                {isIndexing && progress && (
+                                                    <div className="mt-3 space-y-2">
+                                                        {/* Progress Bar */}
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center justify-between text-xs">
+                                                                <span className="text-neutral-400">
+                                                                    Processing: {progress.current || 0} / {progress.total || 0} pages
+                                                                </span>
+                                                                <span className="text-purple-400 font-medium">
+                                                                    {(progress.percentage || 0).toFixed(1)}%
+                                                                </span>
+                                                            </div>
+                                                            <div className="w-full bg-neutral-700 rounded-full h-2 overflow-hidden">
+                                                                <div
+                                                                    className="bg-gradient-to-r from-purple-500 to-blue-500 h-full transition-all duration-300 ease-out"
+                                                                    style={{ width: `${progress.percentage || 0}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Speed and Chunks Info */}
+                                                        <div className="flex items-center gap-4 text-xs">
+                                                            <span className="text-blue-400">
+                                                                🚀 {progress.speed || 0} 页/秒
+                                                            </span>
+                                                            <span className="text-green-400">
+                                                                📦 {progress.chunks || 0} chunks
+                                                            </span>
+                                                            {(progress.eta !== undefined) && (progress.eta || 0) > 0 && (
+                                                                <span className="text-neutral-500">
+                                                                    ⏱️ 预计剩余 {Math.ceil(progress.eta)} 秒
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 )}
                                             </div>
 

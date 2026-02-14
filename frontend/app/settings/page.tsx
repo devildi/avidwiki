@@ -146,6 +146,33 @@ export default function SettingsPage() {
     };
 
     const [activeTab, setActiveTab] = useState<'sources' | 'documents'>('sources');
+    const [dataSources, setDataSources] = React.useState<{
+        forum: boolean;
+        documents: boolean;
+    }>({
+        forum: true,
+        documents: true
+    });
+
+    // Load dataSources from localStorage on mount
+    React.useEffect(() => {
+        const saved = localStorage.getItem('dataSources');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (typeof parsed === 'object' && ('forum' in parsed) && ('documents' in parsed)) {
+                    setDataSources(parsed);
+                }
+            } catch (e) {
+                console.error('Failed to parse dataSources:', e);
+            }
+        }
+    }, []);
+
+    // Save dataSources to localStorage when changed
+    React.useEffect(() => {
+        localStorage.setItem('dataSources', JSON.stringify(dataSources));
+    }, [dataSources]);
 
     return (
         <div className="min-h-screen bg-neutral-900 text-neutral-100 p-8 flex flex-col items-center overflow-x-hidden">
@@ -179,8 +206,8 @@ export default function SettingsPage() {
                     <button
                         onClick={() => setActiveTab('sources')}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === 'sources'
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                             }`}
                     >
                         <Database size={18} />
@@ -189,8 +216,8 @@ export default function SettingsPage() {
                     <button
                         onClick={() => setActiveTab('documents')}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === 'documents'
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                             }`}
                     >
                         <Terminal size={18} />
@@ -338,7 +365,7 @@ export default function SettingsPage() {
                         </div>
 
                         {/* LLM Configuration */}
-                        <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 shadow-lg">
+                        <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 shadow-lg mb-8">
                             <h2 className="text-lg font-semibold mb-2 text-purple-400 flex items-center gap-2">
                                 <Terminal size={18} />
                                 LLM Configuration
@@ -460,6 +487,62 @@ export default function SettingsPage() {
                                 ) : (
                                     <span>⚠️ OpenAI option is currently disabled. Please use Local or DeepSeek instead.</span>
                                 )}
+                            </div>
+                        </div>
+
+                        {/* 新增：数据来源设置 */}
+                        <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 shadow-lg">
+                            <h2 className="text-lg font-semibold mb-2 text-purple-400 flex items-center gap-2">
+                                <Database size={20} />
+                                数据来源
+                            </h2>
+
+                            <p className="text-[13px] text-neutral-400 mb-6 font-light">
+                                选择要启用的数据来源（可多选）
+                            </p>
+
+                            <div className="space-y-3">
+                                {/* 论坛数据源 */}
+                                <label className="flex items-center justify-between p-4 bg-neutral-900/50 rounded-lg cursor-pointer hover:bg-neutral-900 transition-all border border-neutral-700 w-full">
+                                    <div className="flex items-center gap-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={dataSources.forum}
+                                            onChange={(e) => setDataSources(prev => ({ ...prev, forum: e.target.checked }))}
+                                            className="w-5 h-5 rounded border-neutral-600 text-purple-500 focus:ring-2 focus:ring-purple-500"
+                                        />
+                                        <span className="text-base font-medium text-neutral-200">
+                                            💬 论坛数据源
+                                        </span>
+                                    </div>
+                                    <span className="text-sm text-neutral-500">
+                                        {dataSources.forum ? "✅ 已启用" : "未启用"}
+                                    </span>
+                                </label>
+
+                                {/* 文档数据源 */}
+                                <label className="flex items-center justify-between p-4 bg-neutral-900/50 rounded-lg cursor-pointer hover:bg-neutral-900 transition-all border border-neutral-700 w-full">
+                                    <div className="flex items-center gap-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={dataSources.documents}
+                                            onChange={(e) => setDataSources(prev => ({ ...prev, documents: e.target.checked }))}
+                                            className="w-5 h-5 rounded border-neutral-600 text-purple-500 focus:ring-2 focus:ring-purple-500"
+                                        />
+                                        <span className="text-base font-medium text-neutral-200">
+                                            📄 文档数据源
+                                        </span>
+                                    </div>
+                                    <span className="text-sm text-neutral-500">
+                                        {dataSources.documents ? "✅ 已启用" : "未启用"}
+                                    </span>
+                                </label>
+                            </div>
+
+                            <div className="mt-4 p-4 bg-blue-900/20 border border-blue-800/50 rounded-lg">
+                                <p className="text-sm text-blue-300">
+                                    ℹ️ 提示：这两个设置会影响搜索功能。如果同时启用，搜索会同时检索论坛和文档数据。
+                                </p>
                             </div>
                         </div>
                     </>

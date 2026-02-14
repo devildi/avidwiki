@@ -1,0 +1,770 @@
+Help Commands
+  aafexport      -- export selected items from named bin as aaf files.
+  aafklv         -- Enable KLV AAF export format.
+  aaflog         -- Sets AAF Import logging.
+  add            -- Add an expression to a variable.
+  admcset        -- Set ADMCMaster params
+  admdtib        -- Dump Time In Buffer after Execute()
+  admpassthru    -- Enable/Disable OSX software audio passthru.
+  admpreload     -- Set the ADM preload amount
+  admvsync       -- Toggle ADM vsync synchronization
+  AllDrives      -- Allows all drives to act as media drives. (Type 'AllDrives -1' for help)
+  AllowAVCSplicerFixHeaders -- Command to toggle fixing frame headers for supported encoding in AVC Splicer.
+  AllowMemoryDomainDoubling -- Tells the editor to use less memory at the cost of performance when doubling is disabled.  It is always disabled in 32-bit operating systems.
+  AllowSubframeMismatch -- Enable/Disable subframe mismatch allowance during Dynamic relink.
+  AllowUNCWrite  -- Allow writing to UNC paths.  Persistent.
+
+  AlwaysPrintLog -- Always print console to log.
+  AMA            -- Display a list of the AMA console commands.
+  AMA_AvidMXF    -- Enable/Disable Avid MXF MSP plug-in
+  AMA_EnableAAFdump -- Set the boolean to enable AAF dumping to the temp folder.
+  AMA_EnableDumpDIDView -- Set the boolean to enable DigitalImageDescriptor bonds box dumping to the console.
+  AMA_ForceSPAAF -- Set to force SPAAF generation on AMA IP check-in
+  AMA_GetLoggingLevel -- Get the AMA logging level: Errors=0x0, warnings=0x01, verbose=0x02, trace=0x04, info=0x08, all=>0xff
+  AMA_ListComponents -- List AMA Plugin Components
+  AMA_ListPlugins -- List AMA Plugins
+  AMA_ManagerDump -- Dump the AMA_Manager
+  AMA_MSPBlowover -- Set the AMA MSP Blowover check bits to automatically refresh clips based on media file replacement:
+    ShowCurrent<0, None=0x0, AppResume=0x1, BinOpen=0x2, ProjectIdle=0x4, ProjectResume=0x8, All=0xf
+  AMA_SetCachedBitRateLimit -- Sets maximum bit rate for cached AMA video material (set to 0 to disable)
+  AMA_SetLoggingLevel -- Set the AMA logging level: errors=0x1, warnings=0x02, verbose=0x04, trace=0x08, info=0x10, all=>0xff
+  AMA_Settings_WaitImageSeq -- Always wait for a response from the ImageSequencer plug-in if it is presented.
+  AMA_ShowDebug  -- Enable the debug OsPrintfs to give more information to the status of the threads
+  AME_RM_LoggingEnable -- Enable AME Resource Manager logging.
+  ameAMAFI_GetFileCacheSizeGB -- Returns current file cache size
+  ameAMAFI_SetEffReadState -- Changes state (enabled, disabled, dynamic) of block-aligned reads in feeder. Block size depends on storage type
+  ameAMAFI_SetFileCacheSizeGB -- Sets file cache size. Note: if size is reduced then current file cache will be invalidated
+  analytics      -- Analytics info service
+  analyticsinfo  -- Analytics data to be sent
+  answer         -- Present a popup with 1-3 choices, and return the response 
+  AROaddClient   -- adds a machine name or IP address to the list of authorized clients for the Avid Remote Objects server
+  AROdebug       -- enable or disable debugging statements in the Avid Remote Objects server
+  AROlog         -- enable or disable logging traffic for the Avid Remote Objects server
+  AROremoveClient -- removes a machine name or IP address from the list of authorized clients for the Avid Remote Objects server
+  AROstart       -- starts the Avid Remote Objects server
+  AROstartqeventfilter -- Starts ARO's ability to filter QEvents
+  AROstartqtimer -- Starts ARO's QTimer and sets the interval to specified value in ms
+  AROstatus      -- display status for the Avid Remote Objects server
+  AROstop        -- shuts down and unloads the Avid Remote Objects server
+  AROstopqeventfilter -- Stops ARO's ability to filter QEvents
+  AROstopqtimer  -- Stops ARO's QTimer
+  AROusenotificationqevents -- Enables or disables the AROProcessEvent QEvent handling
+  asiocontrol    -- Open ASIO Control Panel
+  asserT         -- Assert that a given condition is true or generate an exception.
+  AsyncGPUThread -- AsyncGPUThread - toggle to control how deferred tasks for GPU FX and GPU FTC are executed
+  AsyncResColumnDrawing -- <no description>
+  AtticInfo      -- Toggles displaying attic related information to user
+  audiobuffertime -- Set Nitris audio playback buffer size in microseconds
+  audioextras    -- Enable or disable extra audio features
+  AudioHWCalibration -- Displays and allows for setting the software side of Audio Hardware Calibration
+  audioinputclocking -- Enables the audio project setting checkbox for "Sync to Input" clocking
+  audiopreread   -- Set the audio preread amount in seconds
+  audioprocesswindow -- Time, in microseconds, for each iteration of audio processing
+  AudioRateMonVerbose -- Set AudioRateMonitor console logging
+  audiosrmtol    -- Set sample rate measurement tolerance in samples per second.
+  audiovoicecount -- Set maximum number of audio voices
+  AvidCode       -- <no description>
+  aviddevicehwunderrun -- Enable/Disable HW Underrun detection.
+  aviddeviceinfo -- Displays information about attached video I/O hardware
+  avslog         -- Routing of Video Slave logs to console or output
+  avslogmask     -- Routing of Video Slave logs to console or output
+  avsprmdel      -- Set Prime delay in loops.
+  avstrc         -- Delay Tracing and Override. Traces coincidence point and StartIO timings. Allows to override.
+  AVXRedrawRate  -- Change the millisecond rate that background windows are refreshed
+  AVXSetupCleanup -- AVXSetupCleanup on/off
+  AVXToggleAltFrameOpt -- Toggles GetAlternateFrame UI Optimization
+  BackgroundBinSave -- Enable/Disable Background Bin Save
+  BgCheckin      -- Toggle use of background checkins on this machine.
+  BinSaveThreads -- Set/Get number of saving threads
+  blipstats      -- Blip Play Stats
+  BlitStallParams -- Sets blit stall for debug params. frequency in frame times, duration in ms
+  bob_addrequests -- Sets a number of requests to increase the output display list size due to Video Output
+  BoundsMixMatch -- Enable/Disable support for bounds mix & match.
+  BuildTrace     -- <no description>
+  bvocafope      -- VDM3_BobVideoOut CalculateAccurateFrame printf enable.
+  bvoerpe        -- VDM3_BobVideoOut Execute printf enable.
+  bvosetspring   -- VDM3_BobVideoOut Set spring limit. Enter negative value to display current limit.
+  CacheBadLocators -- Enables/disables caching of bad network paths for batch import
+  CaptureJ2K     -- Enables J2K Capture
+  CaptureMPEG    -- Enables MPEG Baseband Capture
+  CapturePreallocation -- Enable/Disable media file preallocation on capture
+  cat_enableObjectPool -- Enable/Disable Global Object Pool in CATIFDecodeCvtr
+  cat_numCodecs  -- Sets number of codecs in CATIFDecodeCvtr
+  cat_numThreads -- Sets number of threads per codec in CATIFDecodeCvtr
+  CCGPUPipeline_SF -- Toggle allowing GPU Pipeline for Single Frame Player in CC.
+  ChangeGammaOnExport -- This will apply a Gamma change when exporting to H.264, Photo JPEG and MPEG-4 codecs in QuickTime
+  ChangeProjType -- Change the project type
+  ChangeXDCAMReadFlags -- Changes the XDCAM read flags. Boolean UseDirectIO param specifies using DirectIO/BufferedIO. Integer PageSizeKb param specifies read sizes (only 64, 128, 256 are supported)
+  CheckAndRepairMob -- 
+  CheckCommands  -- <no description>
+  CheckDecks     -- Re-initializes serial communications with decks
+  checkIngestCount -- Returns how many in progress ingests are scheduled from a standalone TM
+  CheckSequences -- Check sequences for errors
+  ChromaFilt411  -- Apply chroma filtering during DV25 title renders
+  ChromaHueReverse -- Reverses the Software Color Effect Chroma Hue rotation
+  CleanFiller    -- Checks filler for empty attribute lists.  Removes empty attribute lists in filler if 'CleanFiller 1' is used
+  cleanupdatabases -- <no description>
+  ClearBinWriteStatus -- Clear Bin Write Status
+  ClearCache     -- Clear the Cache
+  ClearCachedLocators -- Clears cached markers found during batch import
+  ClearCacheEntry -- Clear a Cache Entry for Frame
+  ClearInProgress -- Clear InProgress List
+  ClearMappers   -- Clear Cached Mappers - Bool Force (False by Default)
+  ClearPersistentPerformance -- Clear Persistent Performance
+  ClearProtocolErrors -- Resets protocol error logs
+  ClearSecondary -- Clear Secondary Buffers
+  clearSourcePath -- Clear Source Path of master clips in the specified bin. WARNING this is a destructive command!
+  ClickDetector  -- Turn click detection on/off
+  ClickDetectorParams -- Set click detection options
+  ClientMonTest  -- Start and end the gathering of timing statistics for the AVX2 client monitor interface test.
+  CloseAllAVXPlugins -- Close down all AVX plug-ins
+  CloudBinStubVolume -- Set cloud stub volume
+  cmd_setImportSlideLength -- Sets the number of frames for subsequent imports of single frame graphics.
+  cmdDumpPrecomputes -- Display a list of precomputes for the current project
+  CodecInfo      -- Extract codecs info from Compression Manager and save in a header file
+  CodecLog       -- Show codec error log.
+    dump - dump tail (most recent) portion of logs to the console (use Redir first to dump to file)
+    dumpall - dump all logs to the console (use Redir first to dump to file)
+    on - show the logs in the console as they come in
+    off - do not show the logs in the console as they come in
+    level - set the log level, higher level for more logs, must also specify level parameter
+
+  ColorMixMatch  -- Enable/Disable support for color mix & match.
+  CompareGroups  -- Compare 2 groups selected in bin
+  ConcurrentLocators -- enables concurrent markers
+  Console        -- Type 'Console help' for complete help.
+  consoleloG     -- Turns Console logging on and off.
+  consolelogofF  -- Turns Console logging off.
+  consoleWindow  -- <no description>
+  ConsolidateGroupsOnExport -- Toggles whether or not group clips are consolidated on export.
+  convertavs_bypassscale -- Toggle bypassing the scale call in convert AVS.
+  convertavsacpl -- <no description>
+  ConvertAVSMT   -- <no description>
+  ConvertColorSpace -- When on, converts 709 HD to 601
+  CoreEvent      -- Type 'CoreEvent help' for complete help.
+  CoreEventLogger -- Type 'CoreEventLogger help' for complete help.
+  CountRenderedFX -- Counts the number of fully rendered effects in the sequence in the record monitor
+  CountThings    -- Display count and list of all consumers/converters/producers in current pipes
+  CPP            -- Clear Persistent Performance
+  CreateFFMedia  -- Toggle creation of Side-by-Side in place of Full Frame.
+  DebugACFMemAllocation -- Toggle debugging info for the ACFMemAllocation interface
+  debugadm       -- Debug audio device manager
+  DebugMenu      -- <no description>
+  DebugWin       -- <no description>
+  DefaultImageStartAlignment -- Sets the default value of image start alignment
+  DesktopSampleOffset -- Set the sample offset to sync desktop audio and video
+  DeveloperDongleMode -- Enables or disables DeveloperDongle privileges
+  dfmreload      -- 
+  DigitalCutFrames -- <no description>
+  digitalCutPlayDelay -- Set the timeout value to wait before starting player when doing Digital Cut
+  DigitalCutPlayerCycles -- Set minimum player cycles for UI update.
+  DigitizeFrames -- Set the number of frames of coincidence for digitize
+  Disable3D      -- Disables 3DFX on subsequent launches
+  DisableNewStyleMulticam -- Disables new style multicam
+  DisableSearch  -- Disables Search client support on subsequent launches.
+  disco          -- <no description>
+  DisplayControllerTraffic -- Display controller messages to Composer
+  diva           -- Hidden command to enable using hidden commands.
+  dms            -- DMS Test
+  dmslog         -- Toggles DMS logging on and off
+  dmsmonikers    -- Toggles DMS moniker source from node to checkin
+  DoFtlAssert    -- DoFtlAssert behavior.
+  dontSave       -- Enable/Disable skip bin save prompt when bin is locked.
+  DontWrite      -- Enable/Disable DIDWriter
+  DPP            -- Dump Persistent Performance Stats to File
+  DPPE           -- Dump Persistent Performance Effects Stats to File
+  dpSetRealm     -- Allows overriding the realm, not persistent
+  dsoundset      -- Set DirectSound buffering params
+  dump           -- <no description>
+  dumpampimixer  -- Prints out the AMPI mixer signal net
+  DumpAVCSplicerOutput -- Developer command to dump Splicer output
+  DumpAVCSplicerStats -- Command to on/off dumping AVC Splicer stats
+  DumpCachedFrameData -- Dump the Cache Information depending on Param - Dup or All or FrameNo
+  DumpClipSummary -- Dump a summary of clips found in the currently loaded sequence.
+                    By default, all tracks in the sequence are checked, ignoring any In-Out marks.
+  DumpComponent  -- Dumps a Component to the console.
+  DumpDrives     -- Dumps internal drive list.
+  DumpEffectDepth -- DumpEffectDepth on/off
+  DumpEffectPalette -- Dumps registered FX inside the Effect Windows (Dev Only)
+  DumpFXLocation -- Dump a list of effects found in the currently loaded sequence with track and timecode location information.
+                    By default, all tracks in the sequence are checked, ignoring any In-Out marks.
+  DumpFXSummary  -- Dump a summary of effects found in the currently loaded sequence.
+                    By default, all tracks in the sequence are checked, ignoring any In-Out marks.
+  dumpinputmixer -- Dump state of input mixer
+  DumpLocalVolumes -- Dumps LocalVolume list.
+  DumpMachineAttributes -- Displays template attributes for each machine
+  DumpMachineTemplates -- Displays deck templates read into system
+  DumpMappers    -- Dump Mappers Info
+  DumpMaxPeaks   -- Display Audio Meter Max Peaks
+  DumpMediaFilePaths -- Enables print of media file paths during creation of media files.
+  DumpMemInfo    -- Write a dump file containing memory usage and heap information
+  dumpmetertimestats -- Dump stats on the meters
+  DumpMob        -- Dumps a Mob to the console.
+  DumpOverrunInfo -- Dump error logs after overruns.
+  DumpPersistentPerformance -- Dump Persistent Performance Stats to File
+  DumpPersistentPerformanceBW -- Dump Persistent Performance BW Stats to File
+  DumpPersistentPerformanceEffects -- Dump Persistent Performance Effects Stats to File
+  dumppmr        -- dumppmr drive
+    drive is the refnum of the drive to be dumped
+    No drive means all mobs on all drives including well known mobs are to be dumped.
+    If drive is wkm, only the well known mobs are to be dumped.
+    If drive is mdirs, only media directories with their drives refnums are to be dumped
+
+  DumpProtocolErrors -- Displays serial communications errors
+  DumpQMCacheBySM -- <no description>
+  DumpRecordMon  -- <no description>
+  DumpRenderGraph -- Enable the Player to dump Render Graph optional argument: repeat = continually dump render graphgs, none = turn it off
+  DumpSourceMon  -- <no description>
+  DumpSourceSummary -- Dump a summary of sources found in the currently loaded sequence.
+                    By default, all tracks in the sequence are checked, ignoring any In-Out marks.
+  DumpStartupTimeLog -- Dumps startup time log info - does not reset data
+  DumpStreamCutterInput -- Command to on/off dumping StreamCutter intput
+  dumpthreadstate -- Display information about threads.
+  DumpTimeStampLog -- Dump time stamps. Usage DumpTimeStamps <StartOfPlay|StopOfPlay|PerfTest> [reset]
+  DumpVolumeGroups -- Dumps list of VolumeGroups.
+  DumpVolumes    -- Dumps internal volume list.
+  DupeDetectFilmToggle -- Use the Tape offset in place of the Film offset for Dupe Detection in the Timeline
+  dxaudiorecordoffset -- Set record offset required for round trip sync (DX only)
+  EatMem         -- Allocate memory to stress the application.
+ Usage: 
+EatMem [NbMegs] to allocate memory, 
+EatMem [0] to free any already allocated memory
+  ebi            -- <no description>
+  echo           -- Enables or disables echoing script commands to the console.
+  EmbedDNXCC     -- Toggles whether to embed closed captioning in DNX media.
+  EmbedDNXCCdefault -- Sets ancillary data slot defaults.
+  EmbedDNXCCOptions -- Sets the options for ancillary data in DNX media. (slot DID SDID on)
+  Enable3D       -- Enables 3DFX on subsequent launches
+  EnableAltGR    -- Toggle Alt+GR keyboard functionality (Persistent) 
+
+  EnableBinDialogue -- Toggles displaying Bin dialogue to user during Bin operations
+  EnableBinXMLDump -- Toggles dumping of bins to XML during bin save
+  EnableDragDropLogging -- Enable/Disable drag/drop logging
+  enableHD       -- Reset the firehose board and get out of the decoder hung state.
+  EnableNewStyleMulticam -- Enables new style multicam
+  EnablePCEdit   -- <no description>
+  EnablePlayLoopThreading -- Enables or disables internal threading of the player execution loop
+  EnableSearch   -- Enables Search client support for bin text and PhraseFind search on subsequent launches.
+  enableSTPAlwaysRender -- enable Always Re-render on Send to Playback
+  enableSTPTranscode -- enable STP transcode functionality in Standalone TM editors.
+  EnableSTWGLengthCheck -- Sets length in minutes to check for on Send to Workgroup
+  EnableSWCC     -- Enables software color correction
+  EnableTimeStampLogger -- Enable/Disable timestamp logging
+  EnableTruncateWarning -- Enable/Disable Bin Text Truncate Warning
+  EncodeAVCHD    -- Enables AVC HD Encode
+  EncodeMPEG2IFrame -- Enables MPEG2 I Frame Encode
+  EncodeMPEG4    -- Enables MPEG4 Encode
+  eqt            -- <no description>
+  euccaccel      -- Set CC Acceleration Curve
+  euchhd         -- EUCON Channels Hide
+  ewcguard       -- Sets or views the Edit While Capture guard band size, in seconds.
+  ExceptOnTag    -- Debug Only tool - streaming Play will raise an exception when target exec tag has completed.
+  ExcludeDynamicAVX2EffectAdd -- Add Named AVX2 Effect to List of Excluded Dynamic Effects that contain provided string parameter
+  ExcludeDynamicAVX2EffectClear -- Clear the List of Known Exclude Dynamic Effects
+  ExcludeDynamicAVX2EffectDelete -- Delete Named AVX2 Effect from List of Excluded Dynamic Effects that contain provided string parameter
+  ExcludeDynamicAVX2EffectList -- List current Known Excluded Dynamic Effects
+  ExcludeDynamicAVX2EffectScan -- Scan and List all AVX2 Effects that contain provided string parameter
+  ExecScriptFile -- Load a script file & execute any non-definition commands.
+  exiT           -- Exit a script.
+  Expect         -- Assert that every line in a block will generate a given exception.
+  ExportTmf      -- Exports current sequence to TMF file
+  ExportTmfOptions -- Toggle the option for TMF export/STP. Supported options: verbose
+  ExternalDynamicAVX2EffectAdd -- Add Named AVX2 Effect to List of Known Dynamic Effects that contain provided string parameter
+  ExternalDynamicAVX2EffectClear -- Clear the List of Known External Dynamic Effects
+  ExternalDynamicAVX2EffectDelete -- Delete Named AVX2 Effect from List of Known Dynamic Effects that contain provided string parameter
+  ExternalDynamicAVX2EffectList -- List current Known External Dynamic Effects
+  ExternalDynamicAVX2EffectReset -- Reset the Known External Dynamic Effects List to Default
+  ExternalDynamicAVX2EffectScan -- Scan and List all AVX2 Effects that contain provided string parameter
+  FakeDeck       -- Uses a 'virtual' deck for deck control
+  fatal          -- Abort a script with an assertion 'fatal' error message.
+  FileCacheTargets -- Changes which items go into the file cache
+  FindMFX        -- Finds motions effects in source clips
+  FlushInternalQMCaches -- Service command for flushing all internal Quality Manager caches.
+  ForceAcqRelUpdate -- Toggle between forcing DX HW to be reprogrammed (Persistent)
+
+  ForceAutoSave  -- Dirties all open bins and makes an auto save happen in 5 seconds.
+  ForceCheckin   -- Toggles forced full checkin on and off.
+  ForceFont      -- Toggles Title Tool to always use the Font in the Font menu regardless of Input Language
+  ForceHDTranscode -- Force Transcode of HD to SD when Digital Cutting HD material in a SD Project.
+  ForceImportResolve -- Forces all imported mobs to wn the mob resolution.  Non-persistent.
+
+  forceQTImport  -- Toggles usage of Quicktime to import image files that will not import normally.This will increase import time.
+  ForceRgbCompositing -- ForceRgbCompositing [on = Force compositing in RGB(444), off = Restore default compositing]
+  ForceVideoUnderrun -- Forces video underruns. (Type: 'ForceVideoUnderrun -1' for full help.)
+  foreach        -- Foreach statement using a comma separated list.
+  forEachBinMob  -- Executes a command for each Mob.
+  forEachMob     -- <no description>
+  FrameRateMixMatch -- Enable/Disable support for frame rate mix & match.
+  FSP            -- Full Screen Playback: 'FSP Help' for more info
+  ftc_toggleallowgpu -- Toggle Allow FTC on GPU.
+  ftc_togglecorecounting -- Toggle tracking of CPU Core utilization for FTC.
+  FTCA           -- FTCA [1 = Enable AlphaMono handling, 2 = Disable AlphaMono handling]
+  FTCQ           -- FTCQ [1 = Speed over quality, 2 = Quality over speed]
+  FTCTC          -- FTCTC [< 0 = display current value, >= 0 = set the FTC IL processor TBB concurrency]
+  FTF            -- Feature Toggle File overrides
+  FTFChainedToggles -- Prints state of chained feature toggles.
+  FTFDefaults    -- Feature Toggle File default toggle data as a JSON.
+  FtlAssert      -- FtlAssert behavior.
+  FullQualFX     -- Allows Full Quality Play with SWRTFX
+  fxacplgraph    -- Dumps ACPL execution graph
+  FXDump         -- Dumps registered FX
+  FXGIMASYNC     -- GIM async mode enable/disable
+  FXGOMASYNC     -- GOM async mode enable/disable
+  FXRenderMethod -- FXRenderMethod [1 = Synchronous [default], 2 = Synch/DefTask, 3 = Async (limited), 4 = Async (multi-class), 5 = Async (multi-instance), 6 = Async (full CPU), 7 = Async (full CPU/GPU)
+  FXSampleTracker -- FXSampleTracker - toggle to control whether or not input and samples are tracked for FX
+  GammaConform   -- GammaConform toggle 8 bit color correction gamma control range between 16-235/0-255
+  getBuildDate   -- Return build date
+  GetLastAVCSplicerDumpName -- Command to retrieve last dump name
+  GetRemoteStatusFromHAG -- For Remote Client: Sets a boolean value to indicate that remote online status is queried from the HAG.
+  GetSegmentedIndexProcessing -- Show use of Segmented Index processing
+  giantmsg       -- huge dialog
+  Global         -- Create a global variable.
+  GPP            -- Display a graph of the player pipes (and, optionally, vdm devices) from the current player
+  GPPOptions     -- Sets options for the GraphPlayerPipes/GPP commands.  Type GPPOptions help for more information.
+  GraphPlayerPipes -- Display a graph of the player pipes from the current SF & RT players
+  GraphPlayerPipesRemote -- Dumps dotty description of player pipes (and, optionally, vdm devices) from the current player to remote console
+  help           -- Help the user.
+  HiResLUTs      -- Enable/Disable use of High Resolution LUTs.
+  IAC            -- Display a list of the In-AppCommerce console commands.
+  IAC_ClearCookies -- Clears the web cookies and cache
+  IAC_Disable    -- Disables In-AppCommerce UI and support on subsequent launches
+  IAC_DisableHelp -- Disables IAC Help UI and support on subsequent launches
+  IAC_DisableStore -- Disables IAC Store UI and support on subsequent launches
+  IAC_Enable     -- Enables In-AppCommerce UI and support on subsequent launches.
+  IAC_EnableHelp -- Enables IAC Help UI and support on subsequent launches.
+  IAC_EnableStore -- Enables IAC Store UI and support on subsequent launches.
+  IAC_GetUrl     -- <no description>
+  IAC_GotoUrl    -- <no description>
+  IAC_History    -- <no description>
+  IAC_RereadCookies -- reread cookies
+  IAC_WriteCookies -- write cookies
+  iF             -- iF statement (scripts only).
+Single-statement if structure:
+iF cond THEN stmt [ELSE stmt]
+iF condition THEN statement
+[ELSE statement]
+iF condition
+  THEN statement
+  [ELSE statement]
+Multiple-statement if structure:
+iF condition
+  THEN Statement-List
+  END iF
+iF condition THEN
+  Statement-List
+  ELSE statement
+iF condition
+  THEN Statement-List
+  ELSE Statement-List
+  END iF
+If statements are valid in scripts only.
+  IgnoreAffinityAlwaysTrue -- Set Ignore EWC Affinity to True
+  IgnoreQTRate   -- This will ignore the edit rate in a Quicktime file and import the file as if it is sampled at the current project rate
+  IgnoreStreamLimit -- set whether to ignore stream limits or not
+  ImageCache     -- Setting up and print Image Cache statistics.
+  ImportEvents   -- See more detailed import events.
+  ImportMobResolverDebug -- Enable debug printing during import mob resolver operations.
+  ImportP2CardContent -- ImportP2CardContent
+  iNewsDebug     -- Temporary debugging for iNews Capture Mgr Control
+  InteractiveFrameCacheDebug -- Activate/Deactivate interactive cache debug for both VEC and MFC
+  InteractiveFrameCacheDebugHitMiss -- Activate/Deactivate interactive cache debug for Hit/Miss
+  InteractiveFrameCacheMFC -- Activate/Deactivate interactive cache for MFC
+  InteractiveFrameCacheVEC -- Activate/Deactivate interactive cache for VEC
+  Jajko          -- Toggle jajko
+  LBDebug        -- Sets debugging flags in the buildpipes load balancing code
+  LegacyOverlay  -- Force legacy overlay for desktop video: 'LegacyOvelay Help' for more info
+  lmastats       -- Print Large-Memory Allocation Stats to Console:
+lmastats perf [clear] = Performance Stats
+lmastats domains [mark] = Allocation Domain Stats
+lmastats usage = Allocation Usage Stats and Limits
+  LoadBalancingOOC -- Toggle negotiation of Load Balancing OOC.
+  LockMixdownMem -- Toggle locking down of memory for mixdowns
+  Log            -- <no description>
+  LogCalls       -- Direct all calls to Avidtalk commands into the logfile.
+  LogClaims      -- <no description>
+  LogCompMgrCalls -- Enables logging of Compression Manager
+  LogLocateBuffers -- Enables/disables locate buffer log
+  LogLoopPlay    -- Toggle the logging of Loop Play
+  LogOnException -- When enabled, generates coreevent log on first player exception.
+  LogStack       -- Start logging stack calls for logger.
+  LogTest        -- Test the log file triggers
+  logthread      -- Add a thread to the list of threads to log.
+  logthreadmode  -- Specify desitination for thread logging events.
+  ltcphase       -- Set LTC phase offset in frames (+1, -1, or 0)
+  marksdelay     -- Sets the delay to redraw marks in the viewer while scrubbing with audio. Default is 500 msec.
+  MarkToLoopDelay -- <no description>
+  MCFAX          -- Show me the MCFAX!
+  mcsessionlog   -- Toggles MCSession logging on and off
+  MCSI           -- Experimental dialog for turning on and off options to debug sluggishness issues.
+  mcssf          -- Toggle to display the count of skipped and played frames in the console at the end of streaming play at the Queue Level.
+  mdo            -- Sets display options for dumping Mobs to the Console.  (shortcut for MobDumpOptions)
+  MeridienColorFX -- Rotates hue on all color effects in sequence
+  meterupdateinterval -- Set or show audio meter update interval in milliseconds
+  midi002        -- Enable or disable Digi 002 as MIDI control surface on Mac
+  MixdownDebug   -- displays debug info during Mixdown in app console
+  mixer          -- Command exposing sub-commands relevant to mixer.
+  MixMatchRefreshPrompt -- Enable/Disable prompt for automatic refresh of Motion Adapters in sequences loaded into monitors.
+  mixtool        -- Open deprocated mix tool
+  MMLogin        -- Production Management Login command. Note: if one of the params has a dash you must quote the string.
+
+  MobDumpOptions -- Sets display options for dumping Mobs to the Console.
+  MobSummary     -- Displays a one-line summary of a Mob.
+  MonCon         -- Set MonCon viewer mode any/gpu/cpu/off/on/auto. (If off, DesktopDisplay/Desktopconsumer will be used.
+  moncondel      -- Set MonCon delay (frames)
+  moncondelaymsec -- Set MonCon delay (msec)
+  MonConShowSkippedFrames -- Toggle to display the count of skipped and played frames in the console at the end of streaming play at the Queue Level.
+  MonitorProtocol -- Select protocol to monitor
+  monptdrpl      -- Set dropped frame limit to abort play.  Limit is inclusive.  Limit is the delta between 2 consecutive frames. Usually > 1.  Disable: 0
+  monptlog       -- Enable logging of all blit events. Disable: 0, Enable: 1
+  monptloga      -- Enable logging of blit anomalies when delta frame(s) is not <reference> frames.  Usually 1.  Disable: 0
+  MotionFXSize   -- MotionFXSize on/off
+  MpegExportOptions -- Flip MPEG Export Option.
+    verbose - turn on/off debug messages.
+    elementary - turn on/off elementary stream keeping.
+    splicing - turn on/off splicing.
+    VBV - observe/ignore VBV constraint.
+
+  msm            -- Type 'msm help' for complete help.
+  MSMContinuousBG -- Run AsyncMSMRescan continuously for debugging
+  MsmIsOnlineFileCheck -- true means IsOnline uses filesystem (slower, accurate) vs cache (faster, less accurate).
+  MSMMediaToolFullScan -- MSM Always Full MSMRescan on launch of Media Tool. This command is for debugging purposes only.
+ 
+  msmpendingpoll -- 
+  MSMRescanFGRepeat -- Always Run Foreground MSMRescan when idle for debugging
+  MSMRescanShowProgress -- Show Progress Bar for all MSM Scans Toggle (Persistent)
+  MulticamPreload -- Allows the user to override the default number of frames to pre-load when beginning multicam playback.  This can help reduce dropped frames.
+  multichannelpipes -- Toggles building multichannel pipes for interleaved media
+  MultithreadFX  -- Toggles multithreaded rendering of FX
+  NDIservicename -- Shows or changes the NDI service name.
+  NegotiateBayer -- Toggle negotiation of Bayer pattern converter effect for ProResRAW.
+  NegotiateColorspace -- Toggle negotiation of colorspace converter effect for ACES.
+  NextProgressWindowStyle -- NextProgressWindowStyle
+  noFakeDeck     -- disables FakeDeck
+  nps            -- Toggle to display StreamingPlay Consumer statistics in the console at the end of streaming play.
+  OMMCheckAllMasterMobs -- Ask asset mgr about all master mobs in a bin, not just mobs on shared storage(toggle)
+  on             -- Define an event handler.
+  openBin        -- Open a Bin.
+  OpenProject    -- <no description>
+  OsPrintf       -- Enables/Disables OsPrintf. Type 'OsPrintf help' for complete help.
+  OsPrintfFlush  -- Flush the memory buffer to disk. Type 'OsPrintf help' for complete help.
+  PaintFX        -- Toggles paint effects implementation to select new or legacy implementation
+  PaneIDkey      -- sets up F12 to be the Pane Dump key
+  PaneIDToolTips -- Toggle paneID tooltip
+  ParseMobStreamMetaData -- Parse media stream for special metadata.
+  PauseToStopDelay -- <no description>
+  pcmrt          -- PCM - Press/Release Reset Threshold in seconds (default: 0.25, min: 0.1, max: 2.0)
+  pcmundo        -- PCM - Undo Reset Time in seconds (default: 1.0, min: 0.5, max: 5.0)
+  PerfBufLevel   -- Sets buffering performance level
+  PerfBufParams  -- Sets buffering performance parameters: collection interval and max collection records to keep. An interval of -1 set params to no-op
+  perfmonwin     -- toggles Dynamic buffering performance window
+  PerfTest       -- Peformance Tests
+  PinnacleOptions -- Change MPEG Export Pinnacle Encoder Options.
+  PlayLength     -- <no description>
+  playStats      -- play stats command
+  powerman       -- Enable/Disable handling Power Management broadcast messages from OS
+  PrintACFDefinition -- List the registered ACF Component definitions.
+  PrintACFPluginInfo -- List the registered ACF Plugin information.
+  PrintBBPAllocs -- Print the current allocations in the Big Buffer Pool to the debugger console
+  PrintCacheStats -- Prints various collected cache statistics.
+  PrintLastBPTime -- Retrieves build pipes times and prints them to console
+  PrintPlayerParams -- Prints out PlayerParam info from settings
+  PrintPlayerPipes -- Display the player pipes from the current player
+  PrintProcessorInfo -- Display information about the installed processors.
+  PrintWrongFormatStatus -- Returns if wrong format slide was played
+  ProfileFix     -- Change the way we create the clip on the Profile using the extended BVW commands.
+  PurgeMemoryAndMapperCache -- Clears memory and all mapper caches.
+  put            -- Store expression into a variable.
+  qm2b           -- Enable/Disable Qt Menu To Button support.
+  qm2b           -- Enable/Disable Qt Menu To Button support.
+  qm2b           -- Enable/Disable Qt Menu To Button support.
+  QtFatal        -- Causes Qt to report a fatal error.
+  QuitMC         -- Exits from the MediaComposer application
+  RebuildEffectPaletteIdleDelay -- Sets idle delay before dirty Effect Palette is rebuilt.
+  RecreateTitleMedia -- <no description>
+  Redir          -- <no description>
+  RefNullComp    -- References a null AComposition pointer, causing an error.
+  RemoveClosedCaptionAttrs -- Remove closed caption attributes on clips referenced by record monitor
+  RemoveMotionCache -- Remove motion effect offset keyframe cache if possible
+  RenameMediaFiles -- <no description>
+  reneW          -- Resets the problem and error counters.
+  RepairAudioSoundEffectSources -- This command repairs audio master clips with missing A2 source information.
+  RepairSequences -- Check sequences for errors and attempt to repair errors
+  repeat         -- General looping keyword.
+  ResampleCapturedAudio -- Turn on/off DV audio resampling during capture
+  ResetCacheStats -- Resets collected cache statistics.
+  ResetDiskBlockSize -- Toggle between block size and chunk size for reported disk block size (requires the pipes to be rebuilt)
+  resetIngestCount -- Returns how many in progress ingests are scheduled from a standalone TM
+  ResetPersistentPerformance -- Reset Persistent Performance
+  ResetTimeStampLogger -- Reset timestamp logs. Usage ResetTimeStampLogger <StartOfPlay|StopOfPlay|PerfTest>
+  ResizeALBM     -- ReszieALBM (Size in MB)
+  RestrictAspectRatios -- Repopulate format pane on project window
+  ReverseEmailSSLSettings -- Sets port 465 to use explicit SSL and all other ports to use implicit.
+  rgbout         -- Toggle mode for enabling output of RGB.
+  RPP            -- Reset Persistent Performance
+  RTEnableAllEffects -- enable all filtered real-time effects
+  Run            -- Load a script file & execute any non-definition commands.  The script file name is taken literally and must not be enclosed in quotes.
+  RunScript      -- Load a script file & execute any non-definition commands.  The script file name may be any string expression.
+  sbHoverScrubTime -- Set the wait interval in mili-seconds before hoverscrub starts to engage. Default: 200.
+  ScaleRequestList -- Specify a factor between 0.5 and 2.0 to scale the size of the request list. 0.5 halves the size, 1.0 keeps it the same, and 2.0 doubles it
+  ScratchMode    -- ScratchMode [0 = dup, 1 = both]
+  ScrubLen       -- Sets the range of frames to use when building the single frame player
+  Search         -- Command used to control Search subsystem behavior.
+  SetAMAProducerCSPOperationMode -- Developer command to set operation mode for CSP: 0-Synchronous, 1-SingleAsync, 2-MultiSerialAsync, 3-MultiParallelAsync
+  SetAMAQTForcedFrameRate -- Forces the plug-in to use the specified rate. Usage: SetAMAQTForcedFrameRate <Boolean enabled> <float forcedFrameRate>
+  SetAMAQTSettingFloat -- Sets settings editor settings to be used by AMA plug-ins. Usage: SetAMAEditorSettingFloat <int settingID> <float param2>
+  SetAMAQTSettingInt -- Sets settings editor settings to be used by AMA plug-ins. Usage: SetAMAEditorSettingInt <int settingID> <int param1> <int param2>
+  SetAMAQTSingleFrameDuration -- Sets duration of a single frame. Usage: SetAMAQTSingleFrameDuration <int seconds>
+  SetAMAStaticImageDuration -- Sets duration of a static image. Usage: SetAMAStaticImageDuration <int seconds>
+  SetAudioLoopPlayPerformance -- <no description>
+  SetAudioTestingState -- <no description>
+  SetAutoPan     -- Sets the pan in the record monitor.  Type 'help setautopan' for details.
+  SetAVX2DebugLevel -- Set the verbosity of console reporting.
+  setblipfade    -- Set num samples to fade blip audio requests (0-24)
+  SetBorrowCarry -- Allow user to adjust borrow carry operations in build-pipes
+  setBPLTimeout  -- Setup unlock timeout in msec for Background Process Locker
+  SetCacheThreshold -- sets caching threshold in frames per cache block 
+  SetClipPan     -- Sets the clip pan in the record monitor.  Type 'help setclippan' for details.
+  SetConstantBinTitles -- Toggles modification to the bin name in the window title
+  SetCoreCountingMax -- Set Max Core Counting for FTC, 0 = Clear
+  setdsmserverlog -- Set DSM Server log level (0-5)
+  SetDueTimeBias -- sets bias in seconds to decrease PreRead Due times
+  SetEcho        -- Flag to echo all executed commands to the console.
+  SetEmailInfoUI -- Brings up Email Info UI
+  SetExtraPreloadTime -- Specify a value to add to the default Preload time
+  SetHWCommitFrames -- Specify the number of frames of video requests that will be committed to the HW pipeline. 0 reverts to the default
+  SetHWCommitTime -- Specify a number of ms of video requests that will be committed into the HW pipeline and will therefore be non-cancelable.  0 reverts to default behavior.
+  SetISISAudioIOSize -- set maximum audio Avid NEXIS IO size in KB
+  SetMAIOLimit   -- Sets num of Multi Async per Stream
+  SetMaxIndexesInMemory -- Set Max Indexes in Memory in BYTES ( 0 = Default is 500MB)
+  SetMaxIndexesToRead -- Set Max Indexes To Read in BYTES ( 0 = Default is 2048*5 = 10240)
+  SetMaxPreloadTime -- Specify a maximum amount of time to spend pre-loading data at the start of play.  0 reverts to default.
+  SetMixdownConserve -- Set mixdown memory conserve factor
+  SetMonitorExceptionVerbosity -- Sets the user feedback level used by the AMonitorPane when it encounters player exceptions
+  SetMouseCmd    -- Set mouse parameters
+  setnamefile    -- Sets preempting input for AFileDialog::NameFile.
+  SetOpenIOmemoryAmountInMB -- Sets the amount of OpenIO memory
+  SetOptimized3DLUTSize -- Set output size of optimized 3D LUT. Use it with ToggleDumpOptimized3DLUTs 1
+
+  SetPendingMediaScanInterval -- Sets pending media scan interval to provided value (in minutes).
+
+  SetPlayerUIbalance -- This command alters the delicate balance that adjusts the UI update frequency vs Player underruns/dmfas
+  SetPlayLoopSleepTime -- Sets the per-iteration sleep time of the player control thread in msec when using internal play loop threading.
+  SetPlayStats   -- Set the showing of play stats
+  SetPrecompAutoDelete -- Enable/Disable automatic deletion of unsaved precomputes
+  SetPresigByteTraceLimit -- Sets the maximum number of bytes to print during trace of byte-based presig params
+  SetPresigDebugAllowOffline -- Sets whether to print presig signatures for offline precomputes.
+  SetPresigDebugLevel -- Sets level for debug output when presig output is enabled.
+  SetPresigDebugUseCached -- Sets whether to use cached signatures during precompute signature printing.
+  SetRenderThreadWait -- Change the amount of time the scheduler waits to let the render thread run
+  SetRequestListSize -- Specify the size of the request list used for preload & normal 1x playback.  0 returns to default. -1 to display current settings.
+  SetRescanWarnings -- <no description>
+  setrunoncebuffer -- Enable/Disable direct sound run once capture buffer.
+  SetSBReqListSize -- Sets num of ms in SpringBuffer Streaming request list
+  SetSFStats     -- Set the showing of play stats
+  SetShowBuildPipes -- Display the player pipes whenever the pipes are rebuilt:
+     (graph = use dotty graph, new = print pipes in normal left-to-right order, old = print pipes in older backwards order)
+  SetSleepTime   -- Set time to sleep between null events
+  SetSliderSensitivity -- Choose step with which sliders move while holding SHIFT
+  SetSliderSensitivityACES -- Choose step with which sliders move while holding SHIFT (ACES project only)
+  SetSPCTimeout  -- Set the StreamingPlayConsumer timeout value for stalled pipes
+  SetSWFXSubPipes -- Force upstream effects of a SW effect to also be in SW (default = play). (Type: 'SetSWFXSubPipes help' for help using this command.
+  SetThreadPriorityByID -- Sets specified thread to critical priority
+  SetUndoMan     -- <no description>
+  SetUpdateWhilePlayingOn -- Set whether globalState should be updated during play.
+  SetVideoVitalsFromTrackGroup -- Enable/Disable SetVideoVitalsFromTrackGroup
+  SetVolumeLatency -- Slows down the volume's I/O to simulate the slow volumes. Latency is in msec
+  sf             -- Toggle to display the count of late and skipped frames in the console at the end of streaming play.
+  ShowACPLOutOfMemory -- Toggle if Show ACPL Out Of Memory Error.
+  showbptime     -- Toggles display of build pipes times in the console
+  ShowMixdownMemStats -- Toggle showing mixdown memory statistics
+  ShowNEMPlayStats -- Toggle to display StreamingPlay Consumer statistics in the console at the end of streaming play.
+  ShowNewStyleMulticam -- Shows the current state of multicamera operation
+  ShowPlayStats  -- Toggle the showing of play stats
+  ShowPlayStats  -- Toggle the showing of play stats
+  ShowSFStats    -- Toggle the showing of single frame play stats
+  ShowSystemInformation -- Show the System Information
+  SkippedFrames  -- Toggle to display the count of late and skipped frames in the console at the end of streaming play.
+  skipUpdateDRM  -- Skip updating DRM of referenced mobs on sequence checkout
+  SlowAsyncReads -- Slows down only new async execution model reads.
+  sod            -- Toggle mode for stopping playback on dropped frames.
+Caution - play with StopOnDrop active will not correctly support any offspeed play (i.e. rates other than 1x forward).
+  SourceAdapterSuppression -- Toggle the ability to suppress source adapter fx in performance-critical scenarios
+  spc_preloadoverride -- Override the preload amount to a specific amount of frames.
+  StartOfPlayTime -- Calculate start of play time. Usage StartOfPlayTime [filter_string]
+  StartOGLFramesCount -- Starts calculating average FPS
+  StatTest       -- <no description>
+  StatTest       -- <no description>
+  StepToTrim     -- <no description>
+  StopOfPlayTime -- Calculate stop of play time
+  StopOGLFramesCount -- Stops calculating average FPS
+  stopondrop     -- Toggle mode for stopping playback on dropped frames.
+Caution - play with StopOnDrop active will not correctly support any offspeed play (i.e. rates other than 1x forward).
+  STPDebug       -- Enable/Disable STP debug. This setting is persistent.
+When enabled, debug output will be written to the specified directory. For example: "STPDebug enable C:\temp\STPoutput" or "STPDebug disable"
+  Subsys         -- Control the debug parameters.  The first syntax is used to set or clear the debug flags for a subsystem.  The second syntax is used to read the current value of a debug flag   The command 'Subsys' with no arguments is used to list all of the available subsystems.
+  SuppressUnderruns -- Turn suppression of underruns on/off. (Type: 'SuppressUnderruns help' for help using this command.
+  SwitchBinSaveWorkflow -- This command switches between new BinSave code and old one. Enabling new workflow allow saving Bins in Background.
+  TargetFormat   -- Dump the current global target format
+  tbb            -- Toggles the usage of the Intel Threading Building Blocks (TBBs) for multi-core optimization
+  TBBMC          -- TBBMC [< 0 = display current value, 0 = reset to default, > 0 = set the IL processor max TBB concurrency]
+  TBBPrintStats  -- TBBPrintStats
+  TBBPS          -- TBBPS [< 0 = display current value, 0 = reset to default, > 0 = set the global TBB thread pool size]
+  TBBResetStats  -- TBBResetStats
+  TBBToggleStats -- TBBToggleStats
+  TCBreakTolerance -- Continuous Timeode Checking: If the difference between 2 consecutive timecodes is more than 6 frames,
+Avid considers this a break in timecode on the tape. You can override the 6 frame tolerance by setting this value.
+  TCChecking     -- <no description>
+  tearingfix     -- Toggle tearing fix for Source/Record monitor windows
+  TestBXFExport  -- 
+  TestColorConversion -- <no description>
+  TestOffspeedPlay -- <no description>
+  threadgroupbias -- Set the factor to bias larger thread groups.
+  ThrowInDestructor -- Causes Qt to report a fatal error.
+  ThrowInThread  -- Throw an exception in a thread
+  tlToggleAbortDraw -- Toggle whether aborting draw in the timeline is enabled.
+  tlToggleDrawTime -- Toggle whether printing draw time in the timeline is enabled.
+  tmDump         -- <no description>
+  tmDumpAllMethodLists -- <no description>
+  tmDumpAllTools -- <no description>
+  toggle12BitOutput -- Toggle support for 12-bit output
+  ToggleACESreadFile -- Toggle to read specific Granularity file.
+  ToggleACESWheel -- Toggle to read granularity for CC wheel from specific file
+  ToggleACFClientMonitorForAVX -- Toggles use of ACF Client Monitor for avxInstance_v1::DrawToVideoBuffer.
+  ToggleAMAAutoDetectPlugin -- Toggles whether the new AMA autodetect plug-ins are used
+
+  ToggleAsyncAMASP -- Toggles the default use of asynchronous behavior when reading data through AMA Sample Provider Mode
+  ToggleAsyncPreReads -- Toggles Async PreReads
+  ToggleAVCMetaDataParsing -- Toggle parsing of mob avc param set.
+  ToggleAVXRedraw -- Toggle background redrawing when plug-in UI is up
+  ToggleAVXResizing -- Enable/Disable AVX effect resizing
+  ToggleBGCheckinRefs -- Marks items referencing background rendered media for checkin
+  ToggleBGPreRead -- Toggles whether PreReads for Background/non-realtime pipes are issued to Avid NEXIS volumes. (default) PreReads must be enabled (See TogglePreRead)
+  ToggleBlitStall -- toggles blit stall for debug - states: On/Repeat, On/OneShot/Off.
+  toggleBPL      -- Toggle Background Process Locker
+  toggleBPLLog   -- Toggle logging for Background Process Locker
+  ToggleBreakpad -- Breakpad Testing.
+  ToggleCachedAMASP -- Toggles the use of file cache for AMA Sample Provider Mode
+  ToggleCacheEWC -- toggle whether EWC files/mobs can go through cache
+  ToggleCacheStats -- Toggles the collection of cache statistics.
+  ToggleCachingMappers -- Turns the caching of mapper data on and off.
+  ToggleCnvtrs   -- Toggles use of new asynch converters
+  ToggleDebugTools -- Toggle the enabling/disabling of the debug tools - requires restart.
+  ToggleDefEC    -- Toggles enabling of deferred tasks for effects
+  toggledhdump   -- 
+  ToggleDitheringForVectorscope -- Toggle dithering for Vectorscope
+  ToggleDumpOptimized3DLUTs -- Toggle dumping of output optimized 3D LUT. (1=on, 0=off)
+  ToggleEventLogTool -- Toggle the enabling/disabling of the event log tool - requires restart.
+  toggleEWCcomplete -- Toggle clip in Source Monitor EWC complete.
+  ToggleExtraDebugChecks -- Toggle RequestList Extra Debug Checks
+  ToggleFakeMouseShuttle -- Toggles the use of simulated input for the mouse jog & shuttle features.
+  ToggleFileCachePreReads -- Toggles the use of pre-reads when reading through cache.
+  ToggleFileCaching -- Toggles the use of caching when reading media files.
+  ToggleFileDebugDump -- Toggles whether to dump sample len/offset in file on decode error
+  ToggleGraphPerformanceStats -- Toggle use of the performance statistics displayed via GraphPlayerPipes. Enabling these statistics increases BuildPipes time.
+  ToggleHideLinkMenus -- Toggles whether Link menu is visible (Persistent)
+
+  ToggleHWDecode -- Toggles use of Hardware Decode converters
+  ToggleHWEncode -- Toggles use of Hardware Encode converter
+  ToggleImageSeqSleepOnBusyDecoder -- Toggle Image Seq Sleep On Busy Decoder
+  ToggleImageSeqUseOriginalDecoder -- Toggles the ImageSeq uses Original
+  ToggleInPlaceRendering -- Toggle InPlace Rendering Disabled or Enabled - This is a higlevel override, if the Effect never allowed then this will do nothing
+  ToggleJogSpeedAdjustment -- Toggles the use of simulated input for the mouse jog & shuttle features.
+  ToggleLogPlaybackIssues -- Toggle to display playback issues in the console and Isis client during streaming play.
+  ToggleMac2QtInspector -- Toggle Mac2QtInspector
+  ToggleMAIO     -- Toggles Multiple Asyncio per Stream
+  ToggleMapperLifetime -- Toggle Mapper Long/Short Lifetime
+  ToggleMonCon   -- Toggle mode for switching between MonCon and DesktopDisplay.
+  ToggleMonPaneBlip -- Toggle single frame display in the monitors.
+  ToggleMP2Mixdown -- <no description>
+  ToggleMPEGCache -- Enable/Disable Long GOP media parameters cache.
+
+  ToggleMSR      -- Toggles Multi interleaved-sample reads
+  ToggleNewStyleMulticam -- Toggles the use of new style multicam
+  ToggleOGLDebugOutput -- Toggle printing OpenGL info on screen
+  ToggleOGLFormatConversion -- Toggle OpenGL YUV->RGB Pixel Format Conversion
+  ToggleOGLOutside -- Toggle OGL Outside of the Viewer subpipe
+  ToggleOGLScaling -- Toggle OpenGL Scaling
+  ToggleOGLTiming -- Toggle printing OpenGL timing info on screen
+  ToggleOGLWaterMarkOnVideo -- Toggle a watermark on top of played video
+  ToggleOlderMattes -- <no description>
+  toggleOpenIOEncode -- Toggle support for hardware encoding using Open I/O devices
+  ToggleOptimizedBinFrameView -- Toggle optimized bin frame view drawing
+  TogglePlayThreadCoopJoin -- Toggle whether player host thread joins the cooperative thread before calling DoPlay()
+  TogglePreRead  -- Toggles whether PreReads are issued to Avid NEXIS volumes
+  TogglePrintOutWrongFormat -- Toggle Print Out Format message printing to console
+  ToggleProjectBrowsetoAlternate -- For use only with WindowsReadOnlySelectDirectory feature toggle to show alternate Read only browse dialog.
+  TogglePSF      -- Switch the output between true Progressive and PSF out.
+  ToggleReadRate -- Toggles whether ReadRates are osprintf'd
+  ToggleRequestListTrimming -- Allows the request list to be trimmed, by canceling requests, when changing speeds/direction.
+  togglerunmetersinplaycmd -- Toggle doing the meters directly in PlayCmd
+  ToggleSearchDBAlwaysLocal -- Always store search database and phonetic index files locally
+  ToggleSegmentedIndexProcessing -- Toggle use of Segmented Index processing
+  ToggleSharedVerified -- Toggles whether ISIS/NEXIS returns verified.  Not persistent.
+  toggleStatSpace -- Toggle statistics space calculation
+  ToggleThreadedScheduler -- Toggles the default use of the threaded scheduler on real-time pipes
+  ToggleThreadedSFMode -- Enables/Disables Threaded Single Frame Mode
+  ToggleTrackRenderingOrder -- Toggle the track rendering order (persisted): Bottom->Top / Top->Bottom
+  ToggleUseFileCache -- Toggles forcing file cache use
+  ToggleVideoUpdateMode -- Toggles the disconnect mode for video file updates.
+  ToggleViewerVectorscope -- Toggle putting the vectorscope into the viewer effect
+  ToggleViewerVectorscopeAlways -- Toggle always making a viewer vectorscope
+  toggleVQV      -- Turn on/off video quality verifier
+  ToggleYUV      -- Toggles use of board for 1:1 <-> YUV
+  ToggleZGLDebugOutput -- Toggle OpenGL Debug Output
+  tracefd        -- Enables and disables file dialog tracing.
+  tracesuspendresume -- <no description>
+  TrimToUpdateDelay -- <no description>
+  TSTest         -- Test TaskScheduler performance
+  UnderrunOnTag  -- Debug Only tool - streaming Play will trigger an underrun when target exec tag has completed.
+  UpdateAudioEffectLibrary -- Load added and unload removed audio effects.
+  useampimixer   -- Enable or disable AMPI mixer
+  UseAVS         -- Toggle between using XML and AVS files (Persistent)
+
+  UseLongGOPAVCSplicer -- TEMPORARY command to enable/disable the LongGOPAVCSplicer for LongG.  For TESTING only.
+  UseNTSCAudioRate -- Toggles use bad NTSC value 29.97
+  UseThreadedScheduler -- Use the threded buffer scheduler or make the schedule calls right from the player->play() loop
+  ValidateConfig -- Validates the current deck configuration against the decks actually connected.
+  vdmclklog      -- Additional clock logging.
+  verbosE        -- Sets the level of information that goes to the screen. Verbose level must be between 0 and 5. 0 means don't echo anything, 5 means echo it all. Standard level is 4.
+  VTRE           -- Accesses VTR Emulation debug information.  Type 'vtre help' for more info.
+  VTREPriority   -- Reports the current priority setting and whether setting the thread priority for VTRE was successful.
+  WatchSequence  -- Toggle watch sequence mode, which watches the integrity of the sequence in the timeline and alerts if it becomes corrupted.
+  wfAllData      -- Flushes all the waveform cache data
+  wfCacheDump    -- Dumps a SingleLevelWaveformCache's cache map details to a text file in the app startup folder
+  wfCacheSizeMB  -- Sets the Waveform Cache Maximum Size in MB
+  wfCacheStat    -- displays memory usage to the console
+  wfcdump        -- Dumps Contents of Waveform Cache to File.
+
+  wfCmds         -- Displays commands that affect the Advanced Waveform Engine
+  wfEngineDump   -- Dump the WaveformCache state to a text file in the app startup folder
+  wfForceLoad    -- Load waveforms from cache now (ignoring persistence)
+  wfForceSave    -- Save waveforms to cache now (ignoring persistence)
+  wfLastDSFact   -- Reports the last downsample factor requested in GetWaveform()
+  wfLogCaching   -- Set log caching params
+  wfOutlines     -- Toggle waveform outlines
+  wfPxlsDraw     -- Set number of pixels to draw
+
+  wfScaleTime    -- Set the allowed scaling draw time with waveforms in miliseconds.
+  wfTglAsyncLoadSave -- Toggle async waveform cache load/save
+  wfTglAvchd     -- Toggle allowing AVCHD media to display waveforms
+  wfTglDiskRead  -- Enables/disables reading of waveforms from disk
+  wfTglDrawCacheMiss -- Toggle drawing waveform cache misses
+  wfTglDrawCall  -- Toggle waveform drawing implementation
+  wfTglNewDraw   -- Toggle parameters for new WF drawing.
+  wfTglOSTiming  -- Toggle output of waveform timing into OSPrintf
+  wfTglPersistence -- Enabled/disables reading/writing waveform cache while loading/saving projects
+  wfTglScaleDraw -- Toggle drawing waveforms while scaling.
+  wfTglTiming    -- Toggle output of waveform timing into MC console
+  wfTglUsrAbort  -- Toggle user aborting
+  wfTglVerbose   -- Toggle advanced waveforme engine propagating exceptions
+  wfTglWCRP      -- Toggles Suspend - Resume WCRProcessor
+  wfThreads      -- For each waveform caching thread, prints mob and range information of what's being cached.
+    wfThreads [main] - No option displays current status for each WF-Caching thread.  Use option 'main' to get performance/load statistics for the main thread.
+  WorkgroupOverride -- Override Workgroup Client support (if any) so the editor will run using stand-alone/non-workgroup behavior.
+
+  WriteSizeMegs  -- Set Megs to Write
+  XDebug         -- <no description>
+  xfermgr        -- TransferStatusWindow debug
+  xmldebug       -- Toggle XML settings debugging.
+
+  xmllayouttool  -- Shows the XML Layout Tool

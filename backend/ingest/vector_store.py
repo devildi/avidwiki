@@ -94,7 +94,7 @@ def ingest_vectors():
 
 def ingest_pdf_chunks(pdf_id: int, log_callback=None):
     """
-    向量化单个 PDF 文档
+    向量化单个 PDF 文档（流式处理优化版 - 适用于大文档）
 
     Args:
         pdf_id: PDF 在数据库中的 ID
@@ -107,8 +107,8 @@ def ingest_pdf_chunks(pdf_id: int, log_callback=None):
             print(msg)
 
     try:
-        from pdf_extractor import PDFExtractor
-        from database.pdf_schema import get_pdf_by_id, update_pdf_status
+        from pdf_extractor_large import LargePDFExtractor
+        from pdf_schema import get_pdf_by_id, update_pdf_status
 
         # 获取 PDF 信息
         pdf_record = get_pdf_by_id(pdf_id)
@@ -118,40 +118,141 @@ def ingest_pdf_chunks(pdf_id: int, log_callback=None):
 
         log(f"📄 Processing: {pdf_record['filename']}")
 
-        # 提取文本和分块
-        extractor = PDFExtractor(pdf_record['file_path'])
-        chunks = extractor.extract_text()
+        # 创建提取器
+        extractor = LargePDFExtractor(pdf_record['file_path'])
 
-        if not chunks:
-            log(f"⚠️ No text extracted from PDF")
-            update_pdf_status(pdf_id, 'failed', error_msg='No text extracted')
+        # 先获取PDF基本信息
+        pdf_info = extractor.get_pdf_info()
+        if not pdf_info:
+            log(f"⚠️ Failed to read PDF info")
             return False
 
-        # 更新状态为处理中
-        update_pdf_status(pdf_id, 'processing',
-                         total_pages=len(set(c['metadata']['page'] for c in chunks)),
-                         total_chunks=len(chunks))
+        total_pages = pdf_info['total_pages']
+        file_size = pdf_info['file_size']
+        log(f"  📊 File size: {file_size / 1024 / 1024:.2f} MB")
+        log(f"  📊 Total pages: {total_pages}")
 
-        # 向量化
+        # 初始化向量数据库和计数器
         collection = setup_chroma()
+        total_chunks = 0
+        batch_size = 100  # 增加批次大小到100，减少数据库IOPS和WAL文件增长
+        start_time = None  # 用于计算速度
+        vectorizing_start_page = 0  # 记录向量化起始页
 
-        ids = [chunk['id'] for chunk in chunks]
-        documents = [chunk['content'] for chunk in chunks]
-        metadatas = [chunk['metadata'] for chunk in chunks]
+        import gc
 
-        # 分批处理（每批 100 个）
-        batch_size = 100
-        for i in range(0, len(ids), batch_size):
-            batch_ids = ids[i:i+batch_size]
-            batch_docs = documents[i:i+batch_size]
-            batch_metas = metadatas[i:i+batch_size]
 
-            collection.upsert(ids=batch_ids, documents=batch_docs, metadatas=batch_metas)
-            log(f"  ✅ Upserted batch {i//batch_size + 1}/{(len(ids)-1)//batch_size + 1}")
+        # 定义进度回调函数
+        def progress_callback(current_page: int, total_pg: int, message: str):
+            """流式处理进度回调 - 发送结构化进度数据"""
+            import time
 
-        # 更新状态为完成
-        update_pdf_status(pdf_id, 'completed')
-        log(f"✅ PDF {pdf_record['filename']} indexing complete ({len(chunks)} chunks)")
+            nonlocal start_time
+            if start_time is None:
+                start_time = time.time()
+
+            # 计算处理速度和预估时间
+            elapsed = time.time() - start_time
+            speed = current_page / elapsed if elapsed > 0 else 0
+            eta = (total_pg - current_page) / speed if speed > 0 else 0
+
+            # 发送文本日志（兼容性）
+            log(f"  ⏳ {message} (速度: {speed:.1f}页/秒, 剩余: {eta:.0f}秒)")
+
+            # 发送结构化进度数据（新增）
+            if log_callback:
+                progress_data = {
+                    "type": "progress",
+                    "current": current_page,
+                    "total": total_pg,
+                    "chunks": total_chunks,
+                    "speed": round(speed, 2),  # 保留2位小数更准确
+                    "percentage": round((current_page / total_pg * 100), 1) if total_pg > 0 else 0,
+                    "eta": round(eta)  # 预计剩余时间（秒）
+                }
+                log_callback(progress_data, type="progress")
+
+        # 更新状态为处理中
+        update_pdf_status(pdf_id, 'processing', total_pages=total_pages)
+
+        log(f"  🔄 Starting text extraction (streaming mode)...")
+
+        # 流式处理：边提取边向量化，内存优化
+        try:
+            failed_batches = []  # 记录失败的批次
+            retry_count = 0
+            max_retries = 2  # 最多重试2次
+
+            for batch in extractor.extract_text_stream(
+                batch_size=batch_size,
+                progress_callback=progress_callback
+            ):
+                if not batch:
+                    continue
+
+                # 获取这批数据的页码范围
+                first_page = batch[0]['metadata']['page']
+                last_page = batch[-1]['metadata']['page']
+
+                # 准备这批数据
+                ids = [chunk['id'] for chunk in batch]
+                documents = [chunk['content'] for chunk in batch]
+                metadatas = [chunk['metadata'] for chunk in batch]
+
+                try:
+                    import time
+                    vector_start = time.time()
+
+                    # 向量化前提示
+                    log(f"  🔍 Vectorizing {len(batch)} chunks from pages {first_page}-{last_page}...")
+
+                    # 直接执行 upsert
+                    collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
+
+                    vector_time = time.time() - vector_start
+                    if vector_time > 30:
+                        log(f"  ⚠️ Vectorizing took {vector_time:.1f}s (slow batch)")
+
+                    # 更新计数
+                    total_chunks += len(batch)
+
+                    # 向量化完成提示
+                    log(f"  ✅ Vectorized {len(batch)} chunks (pages {first_page}-{last_page})")
+
+                    # 显式触发GC，防止大对象堆积
+                    if total_chunks % 500 == 0:
+                        gc.collect()
+
+                except Exception as batch_error:
+                    log(f"  ❌ Failed to vectorize batch {first_page}-{last_page}: {str(batch_error)[:100]}")
+                    failed_batches.append((first_page, last_page, str(batch_error)[:100]))
+
+                # 发送进度更新（使用最后处理的页码）
+                progress_callback(last_page, total_pages, f"Processed {last_page}/{total_pages} pages")
+
+            # 打印处理总结
+            if failed_batches:
+                log(f"⚠️ Processing completed with {len(failed_batches)} failed batches:")
+                for first, last, error in failed_batches[:5]:
+                    log(f"   - Pages {first}-{last}: {error}")
+                if len(failed_batches) > 5:
+                    log(f"   ... and {len(failed_batches) - 5} more")
+            else:
+                log(f"✅ All batches processed successfully")
+
+        except Exception as stream_error:
+            log(f"❌ Stream processing error: {stream_error}")
+            update_pdf_status(pdf_id, 'failed', error_msg=str(stream_error))
+            return False
+
+        # 更新状态为完成（或部分完成）
+        status = 'completed' if not failed_batches else 'partial'
+        update_pdf_status(pdf_id, status,
+                         total_pages=total_pages,
+                         total_chunks=total_chunks)
+
+        log(f"✅ PDF {pdf_record['filename']} indexing complete!")
+        log(f"   📈 Total: {total_pages} pages, {total_chunks} chunks")
         return True
 
     except Exception as e:
@@ -161,7 +262,7 @@ def ingest_pdf_chunks(pdf_id: int, log_callback=None):
         log(traceback.format_exc())
 
         if pdf_id:
-            from database.pdf_schema import update_pdf_status
+            from pdf_schema import update_pdf_status
             update_pdf_status(pdf_id, 'failed', error_msg=error_msg)
 
         return False
@@ -170,7 +271,7 @@ def ingest_pdf_chunks(pdf_id: int, log_callback=None):
 def delete_pdf_from_chroma(pdf_id: int):
     """从 ChromaDB 删除 PDF 的所有向量"""
     try:
-        from database.pdf_schema import get_pdf_by_id
+        from pdf_schema import get_pdf_by_id
 
         pdf_record = get_pdf_by_id(pdf_id)
         if not pdf_record:

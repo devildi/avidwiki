@@ -22,11 +22,17 @@ export default function SearchInterface() {
     const [answer, setAnswer] = useState('');
     const [llmProvider, setLlmProvider] = useState<'local' | 'cloud' | 'deepseek' | null>(null);
     const [resultLimit, setResultLimit] = useState<number>(10);
+    const [sourceFilter, setSourceFilter] = useState<'all' | 'pdf' | 'forum'>('all');  // 新增：来源过滤
+    const [dataSources, setDataSources] = useState<{
+        forum: boolean;
+        documents: boolean;
+    }>({ forum: true, documents: true });  // 新增：从 Settings 读取的数据来源
     const [elapsedTime, setElapsedTime] = useState(0);  // 计时器
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Load LLM provider preference from localStorage on mount
+    // Load preferences from localStorage on mount
     React.useEffect(() => {
+        // Load LLM provider
         const saved = localStorage.getItem('llm_provider');
         if (saved === 'local' || saved === 'deepseek') {
             setLlmProvider(saved);
@@ -35,6 +41,7 @@ export default function SearchInterface() {
             localStorage.setItem('llm_provider', 'null');
         }
 
+        // Load result limit
         const savedLimit = localStorage.getItem('result_limit');
         if (savedLimit) {
             const limit = parseInt(savedLimit);
@@ -42,7 +49,44 @@ export default function SearchInterface() {
                 setResultLimit(limit);
             }
         }
+
+        // Load data sources from Settings
+        const savedDataSources = localStorage.getItem('dataSources');
+        if (savedDataSources) {
+            try {
+                const parsed = JSON.parse(savedDataSources);
+                if (typeof parsed === 'object' && ('forum' in parsed) && ('documents' in parsed)) {
+                    setDataSources(parsed);
+                }
+            } catch (e) {
+                console.error('Failed to parse dataSources:', e);
+            }
+        }
     }, []);
+
+    // Auto-set sourceFilter based on available data sources
+    React.useEffect(() => {
+        const { forum, documents } = dataSources;
+
+        if (!forum && !documents) {
+            // No sources available - keep 'all' but will show warning
+            setSourceFilter('all');
+        } else if (forum && !documents) {
+            // Only forum available
+            setSourceFilter('forum');
+        } else if (!forum && documents) {
+            // Only documents available
+            setSourceFilter('pdf');
+        } else {
+            // Both available - try to load saved preference
+            const savedFilter = localStorage.getItem('source_filter');
+            if (savedFilter === 'all' || savedFilter === 'pdf' || savedFilter === 'forum') {
+                setSourceFilter(savedFilter);
+            } else {
+                setSourceFilter('all');
+            }
+        }
+    }, [dataSources]);
 
     // 计时器效果
     useEffect(() => {
@@ -78,6 +122,11 @@ export default function SearchInterface() {
         localStorage.setItem('result_limit', limit.toString());
     };
 
+    const handleSourceFilterChange = (filter: 'all' | 'pdf' | 'forum') => {
+        setSourceFilter(filter);
+        localStorage.setItem('source_filter', filter);
+    };
+
     const handleClear = () => {
         setQuery('');
         setHasSearched(false);
@@ -108,7 +157,8 @@ export default function SearchInterface() {
                 body: JSON.stringify({
                     query: query,
                     limit: resultLimit,
-                    llm_provider: llmProvider || 'none'
+                    llm_provider: llmProvider || 'none',
+                    source_filter: sourceFilter === 'all' ? undefined : sourceFilter
                 })
             });
 
@@ -249,13 +299,28 @@ export default function SearchInterface() {
                     )}
                 </form>
 
+                {/* No Data Sources Warning */}
+                {!dataSources.forum && !dataSources.documents && (
+                    <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-xl">
+                        <div className="flex items-start gap-3">
+                            <div className="text-yellow-400 text-xl">⚠️</div>
+                            <div className="flex-1">
+                                <h3 className="text-yellow-400 font-semibold mb-1">无可用数据源</h3>
+                                <p className="text-yellow-300 text-sm">
+                                    请先到 <Link href="/settings" className="underline hover:text-yellow-200">设置</Link> 页面启用至少一个数据源（论坛或文档）。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Search Options */}
                 <div className={clsx(
                     "mt-4 flex items-center justify-between transition-all duration-300",
                     hasSearched ? "opacity-100" : "opacity-0 -mt-2 pointer-events-none"
                 )}>
                     <div className="flex items-center gap-3">
-                        <span className="text-xs text-neutral-500 uppercase tracking-wider">Sources:</span>
+                        <span className="text-xs text-neutral-500 uppercase tracking-wider">Results:</span>
                         <select
                             value={resultLimit}
                             onChange={(e) => handleLimitChange(Number(e.target.value))}
@@ -267,6 +332,28 @@ export default function SearchInterface() {
                             <option value={20}>20</option>
                             <option value={30}>30</option>
                             <option value={50}>50</option>
+                        </select>
+
+                        <span className="text-xs text-neutral-500 uppercase tracking-wider ml-2">来源:</span>
+                        <select
+                            value={sourceFilter}
+                            onChange={(e) => handleSourceFilterChange(e.target.value as 'all' | 'pdf' | 'forum')}
+                            className="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-neutral-300 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer hover:border-neutral-600 transition-colors"
+                        >
+                            {/* Smart options based on available data sources */}
+                            {dataSources.forum && dataSources.documents ? (
+                                <>
+                                    <option value="all">📁 全部</option>
+                                    <option value="pdf">📄 仅文档</option>
+                                    <option value="forum">💬 仅论坛</option>
+                                </>
+                            ) : dataSources.forum ? (
+                                <option value="forum">💬 论坛数据源</option>
+                            ) : dataSources.documents ? (
+                                <option value="pdf">📄 文档数据源</option>
+                            ) : (
+                                <option value="all" disabled>⚠️ 无可用数据源</option>
+                            )}
                         </select>
                     </div>
                     <div className="text-xs text-neutral-600">

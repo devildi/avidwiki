@@ -1,6 +1,5 @@
 """
-PDF 文档提取器 - MVP 版本
-使用 pdfplumber 提取文本并进行简单分块
+PDF 文档提取器 - MVP 版本 (基于 PyMuPDF)
 """
 import os
 import hashlib
@@ -11,9 +10,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    import pdfplumber
+    import fitz  # PyMuPDF
 except ImportError:
-    logger.error("pdfplumber not installed. Run: pip install pdfplumber")
+    logger.error("PyMuPDF not installed. Run: pip install pymupdf")
     raise
 
 
@@ -44,47 +43,49 @@ class PDFExtractor:
         chunks = []
 
         try:
-            with pdfplumber.open(self.pdf_path) as pdf:
-                total_pages = len(pdf.pages)
-                logger.info(f"Processing PDF: {self.filename} ({total_pages} pages)")
+            doc = fitz.open(self.pdf_path)
+            total_pages = doc.page_count
+            logger.info(f"Processing PDF with PyMuPDF: {self.filename} ({total_pages} pages)")
 
-                current_chunk_id = 0
+            current_chunk_id = 0
 
-                for page_num, page in enumerate(pdf.pages, 1):
-                    # 提取页面文本
-                    text = page.extract_text()
+            for page_num, page in enumerate(doc, 1):
+                # 提取页面文本
+                text = page.get_text()
 
-                    if not text or len(text.strip()) < 10:
-                        logger.warning(f"Page {page_num} has little or no text, skipping")
-                        continue
+                if not text or len(text.strip()) < 10:
+                    logger.warning(f"Page {page_num} has little or no text, skipping")
+                    continue
 
-                    # 清理文本
-                    text = self._clean_text(text)
+                # 清理文本
+                text = self._clean_text(text)
 
-                    # 分块
-                    page_chunks = self._split_text(text)
+                # 分块
+                page_chunks = self._split_text(text)
 
-                    # 为每个块添加元数据
-                    for i, chunk_text in enumerate(page_chunks):
-                        chunk_id = self._generate_chunk_id(self.filename, page_num, i)
+                # 为每个块添加元数据
+                for i, chunk_text in enumerate(page_chunks):
+                    chunk_id = self._generate_chunk_id(self.filename, page_num, i)
 
-                        chunks.append({
-                            "id": chunk_id,
-                            "content": chunk_text,
-                            "metadata": {
-                                "source": "pdf",
-                                "filename": self.filename,
-                                "page": page_num,
-                                "chunk_index": i,
-                                "total_pages": total_pages,
-                                "doc_type": "manual"
-                            }
-                        })
+                    chunks.append({
+                        "id": chunk_id,
+                        "content": chunk_text,
+                        "metadata": {
+                            "source": "pdf",
+                            "filename": self.filename,
+                            "page": page_num,
+                            "chunk_index": i,
+                            "total_pages": total_pages,
+                            "doc_type": "manual"
+                        }
+                    })
 
-                        current_chunk_id += 1
+                    current_chunk_id += 1
 
-                    if page_num % 10 == 0:
-                        logger.info(f"Processed {page_num}/{total_pages} pages")
+                if page_num % 10 == 0:
+                    logger.info(f"Processed {page_num}/{total_pages} pages")
+            
+            doc.close()
 
             logger.info(f"Extraction complete: {len(chunks)} chunks created")
             return chunks
@@ -146,12 +147,14 @@ class PDFExtractor:
     def get_pdf_info(self) -> Dict:
         """获取 PDF 基本信息"""
         try:
-            with pdfplumber.open(self.pdf_path) as pdf:
-                return {
-                    "filename": self.filename,
-                    "total_pages": len(pdf.pages),
-                    "file_size": os.path.getsize(self.pdf_path)
-                }
+            doc = fitz.open(self.pdf_path)
+            info = {
+                "filename": self.filename,
+                "total_pages": doc.page_count,
+                "file_size": os.path.getsize(self.pdf_path)
+            }
+            doc.close()
+            return info
         except Exception as e:
             logger.error(f"Error getting PDF info: {e}")
             return None

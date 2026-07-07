@@ -37,7 +37,12 @@ fi
 
 echo -e "${GREEN}启动后端服务...${NC}"
 # 启动后端（后台运行）
-nohup python3 backend/api/main.py > backend_debug.log 2>&1 &
+if [ -f ".venv/bin/python" ]; then
+    PYTHON_CMD=".venv/bin/python"
+else
+    PYTHON_CMD="python3"
+fi
+nohup $PYTHON_CMD backend/api/main.py > backend_debug.log 2>&1 &
 BACKEND_PID=$!
 
 # 等待后端启动

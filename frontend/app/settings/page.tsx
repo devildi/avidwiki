@@ -9,7 +9,7 @@ import PDFManager from '../../components/PDFManager';
 type LLMProvider = 'local' | 'cloud' | 'deepseek' | null;
 
 interface Source {
-    id: number;
+    id: string;
     url: string;
     display_name: string;
     last_updated: string;
@@ -22,13 +22,14 @@ interface Progress {
 
 export default function SettingsPage() {
     const [sources, setSources] = React.useState<Source[]>([]);
-    const [activeTasks, setActiveTasks] = React.useState<Record<number, boolean>>({});
-    const [taskLogs, setTaskLogs] = React.useState<Record<number, string[]>>({});
-    const [taskProgress, setTaskProgress] = React.useState<Record<number, Progress>>({});
-    const [expandedConsoles, setExpandedConsoles] = React.useState<Record<number, boolean>>({});
+    const [activeTasks, setActiveTasks] = React.useState<Record<string, boolean>>({});
+    const [taskLogs, setTaskLogs] = React.useState<Record<string, string[]>>({});
+    const [taskProgress, setTaskProgress] = React.useState<Record<string, Progress>>({});
+    const [expandedConsoles, setExpandedConsoles] = React.useState<Record<string, boolean>>({});
     const [error, setError] = React.useState<string | null>(null);
     const [loading, setLoading] = React.useState(true);
     const [llmProvider, setLlmProvider] = React.useState<LLMProvider>(null);
+    const [syncQueue, setSyncQueue] = React.useState<string[]>([]);
 
     // Fetch sources on load
     const fetchSources = React.useCallback(() => {
@@ -82,7 +83,7 @@ export default function SettingsPage() {
         }
     };
 
-    const handleUpdateNow = async (id: number) => {
+    const handleUpdateNow = React.useCallback(async (id: string) => {
         if (activeTasks[id]) return;
 
         // Reset logs and progress for this ID
@@ -130,20 +131,70 @@ export default function SettingsPage() {
             setTaskLogs(prev => ({ ...prev, [id]: ["❌ Failed to start crawler API call."] }));
             setActiveTasks(prev => ({ ...prev, [id]: false }));
         }
-    };
+    }, [activeTasks, fetchSources]);
 
-    const handleCancel = async (id: number) => {
+    const handleCancel = React.useCallback(async (id: string) => {
         try {
             const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             await fetch(`${API_BASE}/crawler/stop/${id}`, { method: 'POST' });
         } catch (err) {
             console.error("Failed to stop crawler:", err);
         }
-    };
+    }, []);
 
-    const toggleConsole = (id: number) => {
+    const toggleConsole = React.useCallback((id: string) => {
         setExpandedConsoles(prev => ({ ...prev, [id]: !prev[id] }));
-    };
+    }, []);
+
+    // Sync All Topics Handler
+    const queueTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    // Sync All Topics Handler
+    const handleSyncAll = React.useCallback(() => {
+        if (sources.length === 0) return;
+        const ids = sources.map(s => s.id);
+        setSyncQueue(ids);
+    }, [sources]);
+
+    // Cancel Sync All Handler
+    const handleCancelSyncAll = React.useCallback(() => {
+        setSyncQueue([]);
+        if (queueTimerRef.current) {
+            clearTimeout(queueTimerRef.current);
+            queueTimerRef.current = null;
+        }
+        // Cancel all active tasks
+        Object.keys(activeTasks).forEach(id => {
+            if (activeTasks[id]) {
+                handleCancel(id);
+            }
+        });
+    }, [activeTasks, handleCancel]);
+
+    // Sequential Crawler Queue Effect
+    React.useEffect(() => {
+        const isAnyTaskActive = Object.values(activeTasks).some(v => v);
+        
+        if (syncQueue.length > 0 && !isAnyTaskActive && !queueTimerRef.current) {
+            const nextId = syncQueue[0];
+            setSyncQueue(prev => prev.slice(1));
+            
+            queueTimerRef.current = setTimeout(() => {
+                queueTimerRef.current = null;
+                handleUpdateNow(nextId);
+            }, 500);
+        }
+    }, [syncQueue, activeTasks, handleUpdateNow]);
+
+    // Clear timer on unmount
+    React.useEffect(() => {
+        return () => {
+            if (queueTimerRef.current) {
+                clearTimeout(queueTimerRef.current);
+                queueTimerRef.current = null;
+            }
+        };
+    }, []);
 
     const [activeTab, setActiveTab] = useState<'sources' | 'documents'>('sources');
     const [dataSources, setDataSources] = React.useState<{
@@ -230,16 +281,36 @@ export default function SettingsPage() {
                     <>
                         {/* Data Management Section */}
                         <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 shadow-lg mb-8 overflow-x-hidden">
-                            <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
                                 <div className="flex items-center gap-2">
                                     <h2 className="text-lg font-semibold text-purple-400">Data Source Management</h2>
-                                    {Object.values(activeTasks).some(v => v) && (
+                                    {(Object.values(activeTasks).some(v => v) || syncQueue.length > 0) && (
                                         <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
                                     )}
                                 </div>
-                                <span className="text-xs bg-neutral-700 text-neutral-400 px-2 py-1 rounded whitespace-nowrap">
-                                    {sources.length} total topics
-                                </span>
+                                <div className="flex items-center gap-3">
+                                    {syncQueue.length > 0 || Object.values(activeTasks).some(v => v) ? (
+                                        <button
+                                            onClick={handleCancelSyncAll}
+                                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-950/40 text-red-400 hover:bg-red-900/40 transition-all text-xs border border-red-900/30"
+                                        >
+                                            <XCircle size={12} />
+                                            Stop Sync ({syncQueue.length + (Object.values(activeTasks).some(v => v) ? 1 : 0)} left)
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={handleSyncAll}
+                                            disabled={sources.length === 0 || loading}
+                                            className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-all text-xs shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <RefreshCw size={12} className="animate-none hover:rotate-180 transition-transform duration-500" />
+                                            Sync All Topics
+                                        </button>
+                                    )}
+                                    <span className="text-xs bg-neutral-700 text-neutral-400 px-2 py-1 rounded whitespace-nowrap">
+                                        {sources.length} total topics
+                                    </span>
+                                </div>
                             </div>
 
                             <div className="space-y-4">
@@ -306,10 +377,10 @@ export default function SettingsPage() {
 
                                                         <button
                                                             onClick={() => handleUpdateNow(source.id)}
-                                                            disabled={isActive}
+                                                            disabled={isActive || Object.values(activeTasks).some(v => v)}
                                                             className={clsx(
                                                                 "flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all text-sm shadow-md min-w-[120px]",
-                                                                isActive
+                                                                (isActive || Object.values(activeTasks).some(v => v))
                                                                     ? "bg-neutral-800 text-neutral-500 cursor-not-allowed border border-neutral-700"
                                                                     : "bg-purple-600 hover:bg-purple-700 text-white hover:shadow-purple-500/20 active:scale-95"
                                                             )}

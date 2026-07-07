@@ -6,64 +6,77 @@
 - Node.js 18+
 - Chrome/Chromium浏览器（用于Selenium爬虫）
 
-## 🔧 后端设置
+## ⚡️ 快速初始化（推荐）
 
-### 1. 安装Python依赖
-
-```bash
-cd backend
-pip install -r requirements.txt
-```
-
-### 2. 配置环境变量
-
-后端已经包含预配置的开发环境配置文件 `backend/.env`。
-
-**开发环境（默认配置）:**
-- 数据库: `backend/crawler/forums.db`
-- 向量库: `data/chroma_db`
-- CORS: 允许 `http://localhost:3000`
-- LLM: 使用本地Ollama (`http://localhost:11434/v1`)
-
-**生产环境配置:**
-
-复制 `.env.example` 并修改：
-```bash
-cd backend
-cp .env.example .env
-```
-
-编辑 `.env` 文件：
-```bash
-# 修改CORS白名单
-CORS_ORIGINS=https://your-domain.com,https://www.your-domain.com
-
-# 配置OpenAI（如果使用）
-OPENAI_API_KEY=sk-your-actual-key
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-3.5-turbo
-```
-
-### 3. 初始化数据库
+从 GitHub 克隆到本地后，你可以直接使用项目根目录下的 **`init.sh`** 脚本进行一键自动初始化：
 
 ```bash
-cd backend/crawler
-python db_schema.py
+bash init.sh
 ```
 
-### 4. 启动后端服务
+该脚本将自动执行以下任务：
+1. 检测系统中的 Python 3 和 Node.js 环境。
+2. 自动构建独立的 `.venv` 虚拟环境。
+3. 一键安装后端所有的 Python 依赖包。
+4. 复制和配置前端与后端的 `.env` 环境变量配置文件。
+5. 自动创建数据库文件目录，并初始化 SQLite 和 Vector 数据库架构。
+6. 自动进入前端目录安装所有的 Node.js 依赖包。
 
+完成初始化后，直接运行 **`bash start.sh`** 即可一键启动前后端服务！
+
+---
+
+## 🔧 手动安装与配置指南（备用）
+
+如果你不希望使用一键初始化脚本，也可以按照以下步骤手动设置项目：
+
+### 后端设置
+
+#### 1. 创建并激活 Python 虚拟环境
+为了防止包依赖冲突，强烈建议在项目根目录下使用虚拟环境：
 ```bash
-cd backend/api
-python main.py
+# 创建虚拟环境
+python3 -m venv .venv
+
+# 激活虚拟环境
+source .venv/bin/activate
 ```
 
-后端将运行在 `http://localhost:8000`
+#### 2. 安装 Python 依赖
+在激活虚拟环境的状态下，安装后端核心依赖库：
+```bash
+pip install -r backend/requirements.txt
+```
 
-## 🎨 前端设置
+#### 3. 配置环境变量
+复制并创建后端的环境变量配置文件：
+```bash
+cp backend/.env.example backend/.env
+```
+（开发环境默认即可，生产环境可以根据 `.env` 内的注释自行配置跨域 `CORS_ORIGINS` 或 OpenAI Key。）
 
-### 1. 安装Node.js依赖
+#### 4. 初始化数据库
+```bash
+# 激活虚拟环境的状态下
+python backend/crawler/db_schema.py
+```
 
+#### 5. 启动后端服务
+```bash
+# 激活虚拟环境的状态下
+python backend/api/main.py
+```
+后端服务将运行在 `http://localhost:8000`
+
+### 前端设置
+
+#### 1. 配置环境变量
+复制并创建前端的环境变量配置文件：
+```bash
+cp frontend/.env.example frontend/.env.local
+```
+
+#### 2. 安装 Node.js 依赖
 ```bash
 cd frontend
 npm install

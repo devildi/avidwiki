@@ -5,7 +5,7 @@ import { Upload, FileText, Trash2, RefreshCw, CheckCircle, XCircle, AlertCircle 
 import axios from 'axios';
 
 interface PDFDocument {
-    id: number;
+    id: string;
     filename: string;
     original_name: string;
     file_size: number;
@@ -30,10 +30,10 @@ export default function PDFManager() {
     const [pdfs, setPdfs] = useState<PDFDocument[]>([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
-    const [activeIndexing, setActiveIndexing] = useState<Record<number, boolean>>({});
-    const [indexLogs, setIndexLogs] = useState<Record<number, string[]>>({});
-    const [expandedLogs, setExpandedLogs] = useState<Record<number, boolean>>({});
-    const [indexProgress, setIndexProgress] = useState<Record<number, Progress>>({});
+    const [activeIndexing, setActiveIndexing] = useState<Record<string, boolean>>({});
+    const [indexLogs, setIndexLogs] = useState<Record<string, string[]>>({});
+    const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
+    const [indexProgress, setIndexProgress] = useState<Record<string, Progress>>({});
 
     const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -88,7 +88,7 @@ export default function PDFManager() {
         }
     };
 
-    const handleIndex = async (pdfId: number) => {
+    const handleIndex = async (pdfId: string) => {
         if (activeIndexing[pdfId]) return;
 
         setActiveIndexing(prev => ({ ...prev, [pdfId]: true }));
@@ -150,7 +150,7 @@ export default function PDFManager() {
         }
     };
 
-    const handleDelete = async (pdfId: number) => {
+    const handleDelete = async (pdfId: string) => {
         if (!confirm('Are you sure you want to delete this PDF and all its indexed data?')) {
             return;
         }

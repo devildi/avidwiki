@@ -3,7 +3,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
-import sqlite3
 import os
 import sys
 import threading
@@ -36,7 +35,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration from environment variables with defaults
-DB_PATH = os.getenv("DATABASE_PATH", "backend/crawler/forums.db")
 CHROMA_PATH = os.getenv("CHROMA_PATH", "data/chroma_db")
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 
@@ -58,7 +56,7 @@ class SettingsUpdate(BaseModel):
 
 
 class Source(BaseModel):
-    id: int
+    id: str
     url: str
     display_name: str
     last_updated: str
@@ -138,18 +136,16 @@ app.add_middleware(
 @app.get("/sources", response_model=List[Source])
 def get_sources():
     try:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("SELECT id, url, display_name, last_updated FROM sources")
-        rows = c.fetchall()
-        conn.close()
+        from mongo_client import get_db
+        db = get_db()
+        docs = db.avid_sources.find()
         return [
             {
-                "id": row[0],
-                "url": row[1],
-                "display_name": row[2],
-                "last_updated": row[3] or "Never"
-            } for row in rows
+                "id": str(doc.get("_id")),
+                "url": doc.get("url"),
+                "display_name": doc.get("display_name"),
+                "last_updated": doc.get("last_updated") or "Never"
+            } for doc in docs
         ]
     except Exception as e:
         logger.error(f"Error fetching sources: {e}", exc_info=True)
@@ -159,14 +155,15 @@ def get_sources():
 @app.post("/sources")
 def add_source(source: SettingsUpdate): # Overloading SettingsUpdate for URL
     try:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
+        from mongo_client import get_db
+        db = get_db()
         # Simple Logic: display_name = hostname or part of url
         display_name = source.source_url.split('/')[-1] or source.source_url
-        c.execute("INSERT INTO sources (url, display_name, last_updated) VALUES (?, ?, ?)",
-                 (source.source_url, display_name, ""))
-        conn.commit()
-        conn.close()
+        db.avid_sources.update_one(
+            {"url": source.source_url},
+            {"$setOnInsert": {"display_name": display_name, "last_updated": ""}},
+            upsert=True
+        )
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error adding source: {e}", exc_info=True)
@@ -180,12 +177,11 @@ from task_manager import task_manager
 
 import sys
 import os
-import sqlite3
 import time
 from datetime import datetime
 
 
-def run_crawler_task(source_id: int):
+def run_crawler_task(source_id: str):
     try:
         stop_event = task_manager.start_task(source_id)
 
@@ -200,14 +196,13 @@ def run_crawler_task(source_id: int):
 
             specific_urls = None
             try:
-                conn = sqlite3.connect(DB_PATH)
-                c = conn.cursor()
-                c.execute("SELECT url FROM sources WHERE id = ?", (source_id,))
-                row = c.fetchone()
-                if row:
-                    specific_urls = [row[0]]
-                    log_cb(f"🎯 Targeted crawl requested for source ID {source_id}: {row[0]}")
-                conn.close()
+                from mongo_client import get_db
+                from bson import ObjectId
+                db = get_db()
+                doc = db.avid_sources.find_one({"_id": ObjectId(source_id)})
+                if doc:
+                    specific_urls = [doc["url"]]
+                    log_cb(f"🎯 Targeted crawl requested for source ID {source_id}: {doc['url']}")
             except Exception as db_e:
                 log_cb(f"⚠️ Error fetching targeted URL: {db_e}")
 
@@ -249,7 +244,7 @@ def run_crawler_task(source_id: int):
 
 
 @app.post("/crawler/run")
-def trigger_crawler(source_id: int):
+def trigger_crawler(source_id: str):
     if task_manager.is_task_running(source_id):
         return {"status": "error", "message": "Task already running for this source"}
 
@@ -260,7 +255,7 @@ def trigger_crawler(source_id: int):
 
 
 @app.get("/crawler/logs/{source_id}")
-async def stream_logs(source_id: int):
+async def stream_logs(source_id: str):
     queue = task_manager.get_log_queue(source_id)
     if not queue:
         async def empty_stream():
@@ -287,7 +282,7 @@ async def stream_logs(source_id: int):
 
 
 @app.post("/crawler/stop/{source_id}")
-def stop_crawler(source_id: int):
+def stop_crawler(source_id: str):
     if task_manager.is_task_running(source_id):
         task_manager.stop_task(source_id)
         return {"status": "success", "message": "Cancellation signal sent"}
@@ -650,7 +645,7 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 
 @app.delete("/pdf/{pdf_id}")
-def delete_pdf(pdf_id: int):
+def delete_pdf(pdf_id: str):
     """删除 PDF 文档"""
     try:
         from pdf_schema import delete_pdf, get_pdf_by_id
@@ -679,7 +674,7 @@ def delete_pdf(pdf_id: int):
 
 
 @app.post("/pdf/{pdf_id}/index")
-def index_pdf(pdf_id: int):
+def index_pdf(pdf_id: str):
     """手动触发 PDF 索引（向量化）"""
     try:
         # 检查是否已有任务在运行
@@ -727,7 +722,7 @@ def index_pdf(pdf_id: int):
 
 
 @app.get("/pdf/indexing/progress/{pdf_id}")
-async def stream_indexing_progress(pdf_id: int):
+async def stream_indexing_progress(pdf_id: str):
     """SSE: 流式传输索引进度"""
     queue = task_manager.get_log_queue(pdf_id)
     if not queue:

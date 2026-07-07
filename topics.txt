@@ -1,28 +1,3 @@
-import os
-import sys
-
-# Add database module to path
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database'))
-try:
-    from mongo_client import get_db
-except ImportError:
-    # Fallback
-    sys.path.append(os.path.join(os.getcwd(), 'backend', 'database'))
-    from mongo_client import get_db
-
-def init_db():
-    print("Initializing MongoDB collections and indexes...")
-    db = get_db()
-    
-    # Create indexes for avid (threads)
-    db.avid.create_index("url", unique=True)
-    db.avid.create_index("source_url")
-    
-    # Create indexes for avid_sources
-    db.avid_sources.create_index("url", unique=True)
-    
-    # Initialize default sources if not exists
-    default_sources = [
         ('https://community.avid.com/forums/40.aspx', 'Community Issues and Suggestions'),
         ('https://community.avid.com/forums/39.aspx', 'Community Test Posts'),
         ('https://community.avid.com/forums/299.aspx', 'Media Composer: Get Started Fast'),
@@ -53,7 +28,7 @@ def init_db():
         ('https://community.avid.com/forums/372.aspx', 'Avid Pro Video & Film Events and Webinar'),
         ('https://community.avid.com/forums/37.aspx', 'Foro en Español'),
         ('https://community.avid.com/forums/401.aspx', 'Media Composer for Students'),
-        ('https://community.avid.com/forums/403.aspx', "Teacher's Lounge"),
+        ('https://community.avid.com/forums/403.aspx', 'Teacher's Lounge'),
         ('https://community.avid.com/forums/225.aspx', 'Chat With Avid'),
         ('https://community.avid.com/forums/38.aspx', 'Avid Free DV'),
         ('https://community.avid.com/forums/47.aspx', 'Avid Xpress DV - PC'),
@@ -78,17 +53,4 @@ def init_db():
         ('https://community.avid.com/forums/373.aspx', 'Avid Open I/O Forum'),
         ('https://community.avid.com/forums/374.aspx', 'Avid AVX Forum'),
         ('https://community.avid.com/forums/375.aspx', 'Avid DNxHD Forum'),
-        ('https://community.avid.com/forums/396.aspx', 'Avid NEXIS Management API Forum')
-    ]
-    
-    for url, topic in default_sources:
-        db.avid_sources.update_one(
-            {"url": url},
-            {"$setOnInsert": {"display_name": topic, "last_updated": "", "current_page": 1}},
-            upsert=True
-        )
-
-    print("MongoDB initialized.")
-
-if __name__ == "__main__":
-    init_db()
+        ('https://community.avid.com/forums/396.aspx', 'Avid NEXIS Management API Forum'),

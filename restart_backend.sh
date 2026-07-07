@@ -16,5 +16,10 @@ echo "✅ 后端服务已停止"
 echo "🚀 正在启动后端服务..."
 
 cd backend/api
-python main.py &
+if [ -f "../../.venv/bin/python" ]; then
+    PYTHON_CMD="../../.venv/bin/python"
+else
+    PYTHON_CMD="python"
+fi
+$PYTHON_CMD main.py &
 echo "✅ 后端服务已在新窗口启动"

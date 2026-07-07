@@ -1,13 +1,21 @@
-import sqlite3
 import chromadb
 from chromadb.utils import embedding_functions
 import os
+import sys
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-DB_PATH = os.getenv("DATABASE_PATH", "backend/crawler/forums.db")
+# Add database module to path
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database'))
+try:
+    from mongo_client import get_db
+except ImportError:
+    # Fallback
+    sys.path.append(os.path.join(os.getcwd(), 'backend', 'database'))
+    from mongo_client import get_db
+
 CHROMA_PATH = os.getenv("CHROMA_PATH", "data/chroma_db")
 
 def setup_chroma():
@@ -30,39 +38,49 @@ def setup_chroma():
     )
     return collection
 
-def fetch_threads_from_sqlite():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    # Fetch original question content from threads
-    c.execute('''
-        SELECT id, question_content as content, 'System' as author, scraped_at as post_date, title, url 
-        FROM threads
-    ''')
-    threads = c.fetchall()
-    conn.close()
+def fetch_threads_from_mongo():
+    db = get_db()
+    threads = []
+    # Fetch original question content from threads that have not been vectorized yet
+    docs = db.avid.find({"question_content": {"$exists": True, "$ne": ""}, "is_vectorized": {"$ne": True}})
+    for doc in docs:
+        threads.append({
+            "id": doc.get("url"),
+            "content": doc.get("question_content"),
+            "author": "System",
+            "post_date": doc.get("scraped_at") or doc.get("last_post_date"),
+            "title": doc.get("title"),
+            "url": doc.get("url")
+        })
     return threads
 
 def ingest_vectors():
-    """向量化论坛帖子（原有功能）"""
-    collection = setup_chroma()
-    threads = fetch_threads_from_sqlite()
+    """向量化论坛帖子（增量式优化版）"""
+    db = get_db()
+    threads = fetch_threads_from_mongo()
 
-    print(f"Found {len(threads)} threads to ingest.")
+    if not threads:
+        print("No new threads to ingest.")
+        return
+
+    collection = setup_chroma()
+    print(f"Found {len(threads)} new/updated threads to ingest.")
 
     ids = []
     documents = []
     metadatas = []
+    urls_in_batch = []
 
     for thread in threads:
         content = thread['content']
         if not content or len(content.strip()) < 10:
+            # Mark it as vectorized so we don't query it again
+            db.avid.update_one({"url": thread['url']}, {"$set": {"is_vectorized": True}})
             continue
 
         # Combine title + content for better semantic search
         full_text = f"Title: {thread['title']}\nContent: {content}"
 
-        # Use thread ID (which is the URL) for IDs
         import hashlib
         short_id = hashlib.md5(thread['id'].encode()).hexdigest()
         ids.append(f"thread_{short_id}")
@@ -75,24 +93,39 @@ def ingest_vectors():
             "date": thread['post_date'],
             "title": thread['title']
         })
+        urls_in_batch.append(thread['url'])
 
         # Batch ingest every 100 items
         if len(ids) >= 100:
             print(f"Upserting batch of {len(ids)}...")
             collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
+            
+            # Mark these threads as vectorized in Mongo
+            db.avid.update_many(
+                {"url": {"$in": urls_in_batch}},
+                {"$set": {"is_vectorized": True}}
+            )
+            
             ids = []
             documents = []
             metadatas = []
+            urls_in_batch = []
 
     # Final batch
     if ids:
         print(f"Upserting final batch of {len(ids)}...")
         collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
+        
+        # Mark final threads as vectorized in Mongo
+        db.avid.update_many(
+            {"url": {"$in": urls_in_batch}},
+            {"$set": {"is_vectorized": True}}
+        )
 
     print(f"Forum ingestion complete. Total items in collection: {collection.count()}")
 
 
-def ingest_pdf_chunks(pdf_id: int, log_callback=None):
+def ingest_pdf_chunks(pdf_id: str, log_callback=None):
     """
     向量化单个 PDF 文档（流式处理优化版 - 适用于大文档）
 
@@ -268,7 +301,7 @@ def ingest_pdf_chunks(pdf_id: int, log_callback=None):
         return False
 
 
-def delete_pdf_from_chroma(pdf_id: int):
+def delete_pdf_from_chroma(pdf_id: str):
     """从 ChromaDB 删除 PDF 的所有向量"""
     try:
         from pdf_schema import get_pdf_by_id

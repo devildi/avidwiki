@@ -98,6 +98,7 @@ graph TD
 
 1.  **启动后端**:
     ```bash
+    source .venv/bin/activate
     python3 backend/api/main.py
     ```
     (默认运行在 http://localhost:8000)

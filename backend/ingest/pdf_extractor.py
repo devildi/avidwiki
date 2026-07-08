@@ -121,12 +121,14 @@ class PDFExtractor:
 
             # 如果不是最后一块，尝试在句子边界切分
             if end < text_length:
-                # 寻找最近的句号、问号、感叹号
-                for delimiter in ['。', '！', '？', '. ', '! ', '? ', '\n\n']:
-                    delimiter_pos = text.rfind(delimiter, start, end)
-                    if delimiter_pos != -1:
-                        end = delimiter_pos + len(delimiter)
-                        break
+                # 寻找最近的句号、问号、感叹号，必须在重叠区之后以保证向前推进
+                search_start = start + self.chunk_overlap
+                if search_start < end:
+                    for delimiter in ['。', '！', '？', '. ', '! ', '? ', '\n\n']:
+                        delimiter_pos = text.rfind(delimiter, search_start, end)
+                        if delimiter_pos != -1:
+                            end = delimiter_pos + len(delimiter)
+                            break
 
             chunk = text[start:end].strip()
 

@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
@@ -7,6 +8,7 @@ import os
 import sys
 import threading
 import logging
+import asyncio
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from dotenv import load_dotenv
@@ -16,6 +18,7 @@ import shutil
 sys.path.append(os.path.join(os.getcwd(), 'backend', 'database'))
 sys.path.append(os.path.join(os.getcwd(), 'backend', 'ingest'))
 sys.path.append(os.path.join(os.getcwd(), 'backend', 'crawler'))
+sys.path.append(os.path.join(os.getcwd(), 'backend', 'camera'))
 
 # Load environment variables
 load_dotenv()
@@ -24,11 +27,13 @@ load_dotenv()
 os.environ['HF_ENDPOINT'] = os.getenv('HF_ENDPOINT', 'https://hf-mirror.com')
 
 # Configure logging
+log_dir = os.path.dirname(os.path.abspath(__file__))
+log_file = os.path.join(log_dir, "api.log")
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("backend/api/api.log"),
+        logging.FileHandler(log_file),
         logging.StreamHandler()
     ]
 )
@@ -99,6 +104,64 @@ def get_collection():
     return collection
 
 
+# ==================== Camera Monitoring Helpers ====================
+def save_event_to_db(event_data: dict):
+    """将机房检测事件保存到数据库"""
+    try:
+        from database.db import get_db_session
+        from database.models import Event
+        with get_db_session() as db:
+            bbox = event_data.get("bbox", (0, 0, 0, 0))
+            if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+                bx, by, bw, bh = bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]
+            else:
+                bx, by, bw, bh = 0, 0, 0, 0
+
+            event = Event(
+                person_id=event_data.get("person_id"),
+                person_name=event_data.get("person_name", "未识别"),
+                camera_id=event_data.get("camera_id"),
+                camera_name=event_data.get("camera_name", ""),
+                event_type=event_data.get("event_type", "unknown"),
+                behavior=event_data.get("behavior", ""),
+                confidence=event_data.get("confidence", 0.0),
+                snapshot_path=event_data.get("snapshot_path", ""),
+                body_features=event_data.get("body_features", ""),
+                bbox_x=bx, bbox_y=by, bbox_w=bw, bbox_h=bh,
+            )
+            db.add(event)
+            db.commit()
+    except Exception as e:
+        logger.error(f"机房事件保存失败: {e}")
+
+
+connected_websockets = set()
+
+
+async def broadcast_event(event_data: dict):
+    """通过 WebSocket 广播事件到所有前端客户端"""
+    import json
+    message = json.dumps(event_data, ensure_ascii=False)
+    disconnected = set()
+    for ws in connected_websockets:
+        try:
+            await ws.send_text(message)
+        except Exception:
+            disconnected.add(ws)
+    connected_websockets -= disconnected
+
+
+def on_pipeline_event(event_data: dict):
+    """管道事件回调（在工作线程中调用）"""
+    save_event_to_db(event_data)
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.run_coroutine_threadsafe(broadcast_event(event_data), loop)
+    except RuntimeError:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
@@ -107,12 +170,76 @@ async def lifespan(app: FastAPI):
     # Initialize PDF database tables
     import pdf_schema
     pdf_schema.init_pdf_tables()
+
+    # Initialize Camera database tables and start active pipelines
+    try:
+        from database.db import init_db as init_camera_db
+        from core.pipeline import pipeline_manager
+        init_camera_db()
+        logger.info("Camera SQLite database initialized successfully.")
+        
+        # Register pipeline callback
+        pipeline_manager.on_event(on_pipeline_event)
+        
+        # Load and start active pipelines
+        from database.db import get_db_session
+        from database.models import Camera
+        with get_db_session() as db:
+            cameras = db.query(Camera).filter(Camera.is_active == True).all()
+            if cameras:
+                for cam in cameras:
+                    pipeline_manager.add_pipeline(cam.id, cam.name, cam.source)
+                    logger.info(f"Loaded camera: {cam.name} ({cam.source})")
+                pipeline_manager.start_all()
+            else:
+                logger.info("No active camera pipelines found.")
+    except Exception as e:
+        logger.error(f"Failed to load camera system on startup: {e}", exc_info=True)
+
     yield
-    # Shutdown logic (if any)
-    pass
+
+    # Shutdown logic
+    logger.info("Stopping all camera pipelines...")
+    try:
+        from core.pipeline import pipeline_manager
+        pipeline_manager.stop_all()
+        logger.info("All camera pipelines stopped.")
+    except Exception as e:
+        logger.error(f"Failed to stop camera pipelines: {e}")
 
 
 app = FastAPI(title="Avid MC RAG API", lifespan=lifespan)
+
+# Mount snapshots directory
+snapshots_dir = os.path.join(os.getcwd(), 'data', 'camera', 'snapshots')
+os.makedirs(snapshots_dir, exist_ok=True)
+app.mount("/snapshots", StaticFiles(directory=snapshots_dir), name="snapshots")
+
+# Include camera routes
+from routes import cameras as camera_routes
+from routes import events as camera_event_routes
+from routes import persons as camera_person_routes
+from routes import stream as camera_stream_routes
+
+app.include_router(camera_routes.router, prefix="/api", tags=["摄像头"])
+app.include_router(camera_event_routes.router, prefix="/api", tags=["机房事件"])
+app.include_router(camera_person_routes.router, prefix="/api", tags=["人员管理"])
+app.include_router(camera_stream_routes.router, prefix="/api", tags=["视频流"])
+
+
+@app.websocket("/ws/events")
+async def websocket_events(websocket: WebSocket):
+    """实时事件推送 WebSocket"""
+    await websocket.accept()
+    connected_websockets.add(websocket)
+    logger.info(f"WebSocket 客户端已连接 (总: {len(connected_websockets)})")
+    try:
+        while True:
+            # 保持连接，等待客户端消息
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        connected_websockets.discard(websocket)
+        logger.info(f"WebSocket 客户端已断开 (总: {len(connected_websockets)})")
 
 # Global exception handler to avoid exposing sensitive information
 @app.exception_handler(Exception)
@@ -692,7 +819,7 @@ def index_pdf(pdf_id: str):
                 log_cb(f"🚀 Starting PDF indexing for ID {pdf_id}")
 
                 from vector_store import ingest_pdf_chunks
-                success = ingest_pdf_chunks(pdf_id, log_callback=log_cb)
+                success = ingest_pdf_chunks(pdf_id, log_callback=log_cb, stop_event=stop_event)
 
                 if stop_event.is_set():
                     log_cb("🛑 Indexing cancelled by user")
@@ -712,6 +839,7 @@ def index_pdf(pdf_id: str):
                 task_manager.finish_task(pdf_id, status="error")
 
         thread = threading.Thread(target=run_indexing)
+        thread.daemon = True
         thread.start()
 
         return {"status": "started", "message": f"Indexing started for PDF {pdf_id}"}
@@ -749,4 +877,4 @@ async def stream_indexing_progress(pdf_id: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=False)

@@ -17,6 +17,7 @@ import tempfile
 import uuid
 import shutil
 import sys
+import threading
 from typing import List, Dict, Optional, Iterator, Callable
 import logging
 
@@ -56,7 +57,8 @@ class LargePDFExtractor:
     def extract_text_stream(
         self,
         batch_size: int = 100,
-        progress_callback: Optional[Callable[[int, int, str], None]] = None
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        stop_event: Optional[threading.Event] = None
     ) -> Iterator[List[Dict]]:
         """
         流式提取 PDF 文本（Subprocess Sandbox 超时保护）
@@ -64,6 +66,7 @@ class LargePDFExtractor:
         Args:
             batch_size: 每批返回的 chunk 数量
             progress_callback: 进度回调函数 callback(current_page, total_pages, message)
+            stop_event: 停止事件用于取消任务
 
         Yields:
             每批文本块列表
@@ -84,6 +87,9 @@ class LargePDFExtractor:
             
             # PyMuPDF is 0-indexed, human readable is 1-indexed
             for page_idx in range(total_pages):
+                if stop_event and stop_event.is_set():
+                    logger.info("Extraction task cancelled by stop_event")
+                    break
                 page_num = page_idx + 1
                 
                 # 1. 创建私有临时目录 (Sandbox)
@@ -250,12 +256,14 @@ class LargePDFExtractor:
 
             # 如果不是最后一块，尝试在句子边界切分
             if end < text_length:
-                # 寻找最近的句号、问号、感叹号
-                for delimiter in ['。', '！', '？', '. ', '! ', '? ', '\n\n']:
-                    delimiter_pos = text.rfind(delimiter, start, end)
-                    if delimiter_pos != -1:
-                        end = delimiter_pos + len(delimiter)
-                        break
+                # 寻找最近的句号、问号、感叹号，必须在重叠区之后以保证向前推进
+                search_start = start + self.chunk_overlap
+                if search_start < end:
+                    for delimiter in ['。', '！', '？', '. ', '! ', '? ', '\n\n']:
+                        delimiter_pos = text.rfind(delimiter, search_start, end)
+                        if delimiter_pos != -1:
+                            end = delimiter_pos + len(delimiter)
+                            break
 
             chunk = text[start:end].strip()
 

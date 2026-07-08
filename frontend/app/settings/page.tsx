@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, RefreshCw, Terminal, XCircle, ChevronDown, ChevronUp, Database, Cloud, HardDrive } from 'lucide-react';
 import Link from 'next/link';
+import Navbar from '../../components/Navbar';
 import clsx from 'clsx';
 import PDFManager from '../../components/PDFManager';
 
@@ -226,13 +227,11 @@ export default function SettingsPage() {
     }, [dataSources]);
 
     return (
-        <div className="min-h-screen bg-neutral-900 text-neutral-100 p-8 flex flex-col items-center overflow-x-hidden">
-            <div className="w-full max-w-3xl">
+        <div className="min-h-screen bg-neutral-900 text-neutral-100 flex flex-col items-center overflow-x-hidden">
+            <Navbar />
+            <div className="w-full max-w-3xl p-8">
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-8">
-                    <Link href="/" className="p-2 rounded-full hover:bg-neutral-800 transition-colors">
-                        <ArrowLeft size={24} className="text-neutral-400" />
-                    </Link>
                     <h1 className="text-2xl font-bold">Settings</h1>
                 </div>
 
@@ -341,9 +340,14 @@ export default function SettingsPage() {
                                                         </div>
                                                         <div className="flex flex-col min-w-0">
                                                             <span className="text-neutral-200 font-medium truncate text-base mb-0.5">{source.display_name}</span>
-                                                            <span className="text-[11px] text-blue-400 font-mono truncate hover:text-blue-300 transition-colors">
+                                                            <a 
+                                                                href={source.url} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer" 
+                                                                className="text-[11px] text-blue-400 font-mono truncate hover:text-blue-300 hover:underline transition-colors block w-fit"
+                                                            >
                                                                 {source.url}
-                                                            </span>
+                                                            </a>
                                                         </div>
                                                     </div>
 

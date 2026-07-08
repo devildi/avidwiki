@@ -148,7 +148,7 @@ export default function SearchInterface() {
         setElapsedTime(0);
 
         try {
-            const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
             const response = await fetch(`${API_BASE}/search/stream`, {
                 method: 'POST',
                 headers: {
@@ -248,11 +248,6 @@ export default function SearchInterface() {
         <div className={clsx("min-h-screen bg-neutral-900 text-neutral-100 transition-all duration-500 flex flex-col items-center",
             hasSearched ? "pt-4" : "justify-center -mt-20"
         )}>
-
-            {/* Top Right Settings */}
-            <Link href="/settings" className="absolute top-6 right-6 p-2 rounded-full hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white">
-                <Settings size={24} />
-            </Link>
 
             {/* Search Header Area */}
             <div className={clsx("w-full max-w-4xl px-4 transition-all duration-500",

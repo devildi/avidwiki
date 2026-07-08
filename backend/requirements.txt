@@ -31,3 +31,14 @@ pdfplumber>=0.11.0
 # Forms and File Uploads
 python-multipart>=0.0.9
 
+# Computer Vision / Camera Monitoring
+ultralytics>=8.2.0
+opencv-contrib-python>=4.8.0
+mediapipe>=0.10.9
+deepface>=0.0.93
+numpy>=1.24.0,<2.0.0
+Pillow>=10.0.0
+sqlalchemy>=2.0.25
+aiosqlite>=0.20.0
+
+

@@ -125,13 +125,14 @@ def ingest_vectors():
     print(f"Forum ingestion complete. Total items in collection: {collection.count()}")
 
 
-def ingest_pdf_chunks(pdf_id: str, log_callback=None):
+def ingest_pdf_chunks(pdf_id: str, log_callback=None, stop_event=None):
     """
     向量化单个 PDF 文档（流式处理优化版 - 适用于大文档）
 
     Args:
         pdf_id: PDF 在数据库中的 ID
         log_callback: 日志回调函数
+        stop_event: 停止事件用于取消任务
     """
     def log(msg):
         if log_callback:
@@ -218,8 +219,12 @@ def ingest_pdf_chunks(pdf_id: str, log_callback=None):
 
             for batch in extractor.extract_text_stream(
                 batch_size=batch_size,
-                progress_callback=progress_callback
+                progress_callback=progress_callback,
+                stop_event=stop_event
             ):
+                if stop_event and stop_event.is_set():
+                    log("🛑 Vectorization cancelled by user")
+                    break
                 if not batch:
                     continue
 

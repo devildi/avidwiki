@@ -151,19 +151,23 @@ async def broadcast_event(event_data: dict):
     connected_websockets -= disconnected
 
 
+main_loop = None
+
+
 def on_pipeline_event(event_data: dict):
     """管道事件回调（在工作线程中调用）"""
     save_event_to_db(event_data)
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.run_coroutine_threadsafe(broadcast_event(event_data), loop)
-    except RuntimeError:
-        pass
+    global main_loop
+    if main_loop and main_loop.is_running():
+        asyncio.run_coroutine_threadsafe(broadcast_event(event_data), main_loop)
+    else:
+        logger.warning("主事件循环未运行，无法广播事件")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global main_loop
+    main_loop = asyncio.get_running_loop()
     # Startup logic
     get_collection()
     

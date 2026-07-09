@@ -40,6 +40,11 @@ class VideoStream:
         if isinstance(src, str) and src.isdigit():
             src = int(src)
 
+        # 如果是 RTSP 视频流，强制使用 TCP 传输，避免 UDP 丢包导致解码报错
+        import os
+        if isinstance(src, str) and src.startswith("rtsp://"):
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+
         self.cap = cv2.VideoCapture(src)
         if not self.cap.isOpened():
             raise RuntimeError(f"无法打开视频源: {self.source}")

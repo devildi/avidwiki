@@ -282,14 +282,20 @@ export default function MonitoringPage() {
   // Render variables
   const activeCamera = cameras.find(c => c.id === selectedCameraId);
   const videoFeedUrl = activeCamera?.is_running 
-    ? `${API_BASE}/api/stream/${activeCamera.id}/video`
+    ? `${API_BASE}/api/stream/${activeCamera.id}`
     : null;
 
   // Format Helper
+  const parseUTC = (isoString: string): Date => {
+    if (!isoString) return new Date();
+    // 如果没有时区标识，自动补上 "Z"（因为后端写入数据库并返回的是 naive 的 UTC 时间）
+    const utcString = (isoString.endsWith('Z') || isoString.includes('+')) ? isoString : `${isoString}Z`;
+    return new Date(utcString);
+  };
+
   const formatTime = (isoString: string) => {
     try {
-      const date = new Date(isoString);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      return parseUTC(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     } catch (e) {
       return isoString;
     }
@@ -327,385 +333,153 @@ export default function MonitoringPage() {
           </div>
         )}
 
-        {/* ================= COLUMN 1 & 2: MONITOR & LIVE ALERTS ================= */}
-        <div className="lg:col-span-2 flex flex-col gap-8">
-          
-          {/* Live Video Monitor Card */}
-          <div className="bg-neutral-800/60 border border-neutral-800/80 rounded-3xl p-5 shadow-2xl relative overflow-hidden backdrop-blur-sm">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
-                  <Video size={22} />
-                </div>
-                <div>
-                  <h2 className="font-semibold text-lg text-neutral-100">实时视频监控</h2>
-                  <p className="text-xs text-neutral-500">
-                    {activeCamera ? `${activeCamera.name} (${activeCamera.location})` : '请选择或添加摄像头'}
-                  </p>
-                </div>
+        {/* Live Video Monitor Card (Spans 2 columns) */}
+        <div className="lg:col-span-2 bg-neutral-800/60 border border-neutral-800/80 rounded-3xl p-5 shadow-2xl relative overflow-hidden backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
+                <Video size={22} />
               </div>
-
-              {/* Select Camera Dropdown */}
-              <div className="flex items-center gap-3">
-                <select
-                  value={selectedCameraId || ''}
-                  onChange={(e) => setSelectedCameraId(Number(e.target.value))}
-                  className="bg-neutral-900 border border-neutral-700/80 rounded-xl px-3 py-2 text-sm text-neutral-300 focus:outline-none focus:ring-2 focus:ring-purple-500/80 cursor-pointer hover:border-neutral-600 transition-colors"
-                >
-                  <option value="" disabled>-- 选择摄像头 --</option>
-                  {cameras.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-
-                {activeCamera && (
-                  <button
-                    onClick={() => activeCamera.is_running ? handleStopCamera(activeCamera.id) : handleStartCamera(activeCamera.id)}
-                    className={clsx(
-                      "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 shadow-md",
-                      activeCamera.is_running
-                        ? "bg-red-600/90 hover:bg-red-700/90 text-white shadow-red-500/10"
-                        : "bg-purple-600/90 hover:bg-purple-700/90 text-white shadow-purple-500/10"
-                    )}
-                  >
-                    {activeCamera.is_running ? (
-                      <>
-                        <Square size={14} fill="white" />
-                        <span>停止检测</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play size={14} fill="white" />
-                        <span>启动检测</span>
-                      </>
-                    )}
-                  </button>
-                )}
+              <div>
+                <h2 className="font-semibold text-lg text-neutral-100">实时视频监控</h2>
+                <p className="text-xs text-neutral-500">
+                  {activeCamera ? `${activeCamera.name} (${activeCamera.location})` : '请选择或添加摄像头'}
+                </p>
               </div>
             </div>
 
-            {/* Video Container */}
-            <div className="w-full aspect-video bg-neutral-950 rounded-2xl overflow-hidden flex items-center justify-center border border-neutral-800/80 relative shadow-inner">
-              {videoFeedUrl ? (
-                <img 
-                  src={videoFeedUrl} 
-                  alt="Live Camera Feed" 
-                  className="w-full h-full object-contain"
-                  onError={() => {
-                    console.error("MJPEG video stream connection lost");
-                  }}
-                />
-              ) : (
-                <div className="text-center p-8 flex flex-col items-center">
-                  <div className="p-4 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-500 mb-3">
-                    <Video size={36} />
-                  </div>
-                  {activeCamera ? (
+            {/* Select Camera Dropdown */}
+            <div className="flex items-center gap-3">
+              <select
+                value={selectedCameraId || ''}
+                onChange={(e) => setSelectedCameraId(Number(e.target.value))}
+                className="bg-neutral-900 border border-neutral-700/80 rounded-xl px-3 py-2 text-sm text-neutral-300 focus:outline-none focus:ring-2 focus:ring-purple-500/80 cursor-pointer hover:border-neutral-600 transition-colors"
+              >
+                <option value="" disabled>-- 选择摄像头 --</option>
+                {cameras.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+
+              {activeCamera && (
+                <button
+                  onClick={() => activeCamera.is_running ? handleStopCamera(activeCamera.id) : handleStartCamera(activeCamera.id)}
+                  className={clsx(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 shadow-md",
+                    activeCamera.is_running
+                      ? "bg-red-600/90 hover:bg-red-700/90 text-white shadow-red-500/10"
+                      : "bg-purple-600/90 hover:bg-purple-700/90 text-white shadow-purple-500/10"
+                  )}
+                >
+                  {activeCamera.is_running ? (
                     <>
-                      <p className="text-neutral-400 font-semibold mb-1">摄像头未启动</p>
-                      <p className="text-xs text-neutral-600 max-w-sm">
-                        点击右上方“启动检测”按钮开启 YOLOv8 +人脸+体态识别流
-                      </p>
+                      <Square size={14} fill="white" />
+                      <span>停止检测</span>
                     </>
                   ) : (
-                    <p className="text-neutral-500 text-sm">请先添加或选择一个摄像头</p>
+                    <>
+                      <Play size={14} fill="white" />
+                      <span>启动检测</span>
+                    </>
                   )}
-                </div>
-              )}
-
-              {/* Status overlay */}
-              {activeCamera?.is_running && (
-                <div className="absolute top-4 left-4 bg-black/60 px-3 py-1.5 rounded-lg border border-neutral-700 text-xs font-mono text-green-400 flex items-center gap-2 backdrop-blur-md">
-                  <span className="h-2 w-2 rounded-full bg-green-500 animate-ping"></span>
-                  <span>LIVE | FPS: {activeCamera.stats?.fps || 15} | 目标数: {activeCamera.stats?.current_persons || 0}</span>
-                </div>
+                </button>
               )}
             </div>
           </div>
 
-          {/* Camera Management Panel */}
-          <div className="bg-neutral-800/60 border border-neutral-800/80 rounded-3xl p-5 shadow-2xl backdrop-blur-sm">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
-              <h2 className="font-semibold text-lg text-neutral-100 flex items-center gap-2">
-                <Video size={20} className="text-purple-400" />
-                摄像头设备管理
-              </h2>
-              <button
-                onClick={() => setIsAddingCamera(!isAddingCamera)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 rounded-xl text-xs font-semibold text-neutral-300 transition-colors"
-              >
-                <Plus size={14} />
-                添加摄像头
-              </button>
-            </div>
-
-            {/* Add Camera Form */}
-            {isAddingCamera && (
-              <form onSubmit={handleCreateCamera} className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-5 mb-5 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] text-neutral-500 font-semibold uppercase tracking-wider">摄像头名称</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. 机房主门"
-                      value={newCamera.name}
-                      onChange={e => setNewCamera(prev => ({ ...prev, name: e.target.value }))}
-                      className="bg-neutral-950 border border-neutral-800 hover:border-neutral-700 rounded-xl px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:ring-1 focus:ring-purple-500 h-10 w-full"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] text-neutral-500 font-semibold uppercase tracking-wider">视频源 (0 或 RTSP地址)</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="0 或 rtsp://..."
-                      value={newCamera.source}
-                      onChange={e => setNewCamera(prev => ({ ...prev, source: e.target.value }))}
-                      className="bg-neutral-950 border border-neutral-800 hover:border-neutral-700 rounded-xl px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:ring-1 focus:ring-purple-500 h-10 w-full"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] text-neutral-500 font-semibold uppercase tracking-wider">安装位置</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 柜台、机架区"
-                      value={newCamera.location}
-                      onChange={e => setNewCamera(prev => ({ ...prev, location: e.target.value }))}
-                      className="bg-neutral-950 border border-neutral-800 hover:border-neutral-700 rounded-xl px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:ring-1 focus:ring-purple-500 h-10 w-full"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingCamera(false)}
-                    className="w-[104px] h-10 flex items-center justify-center bg-neutral-800/80 border border-neutral-700 hover:bg-neutral-700/60 text-neutral-300 text-sm font-semibold rounded-xl transition-colors active:scale-95 whitespace-nowrap"
-                  >
-                    取消
-                  </button>
-                  <button
-                    type="submit"
-                    className="w-24 h-10 flex items-center justify-center bg-purple-600 text-white font-semibold text-sm rounded-xl hover:bg-purple-700 transition-colors shadow-md shadow-purple-500/10 active:scale-95 whitespace-nowrap"
-                  >
-                    提交
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Cameras Table List */}
-            <div className="space-y-3">
-              {cameras.length === 0 ? (
-                <div className="text-center py-6 text-neutral-600 text-xs italic">无摄像头设备，请添加</div>
-              ) : (
-                cameras.map(cam => (
-                  <div key={cam.id} className="flex items-center justify-between p-3 bg-neutral-900/40 border border-neutral-800/80 rounded-2xl hover:border-neutral-700 transition-all flex-wrap gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className={clsx(
-                        "h-3 w-3 rounded-full shrink-0",
-                        cam.is_running ? "bg-green-500 animate-pulse" : "bg-neutral-600"
-                      )}></div>
-                      <div>
-                        <div className="font-semibold text-sm text-neutral-200">{cam.name}</div>
-                        <div className="text-xs text-neutral-500 font-mono truncate max-w-[200px] md:max-w-xs">{cam.source}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      {cam.location && (
-                        <span className="text-xs px-2.5 py-1 rounded-lg bg-neutral-950/60 border border-neutral-800 text-neutral-400">
-                          {cam.location}
-                        </span>
-                      )}
-                      <button
-                        onClick={() => handleDeleteCamera(cam.id)}
-                        className="p-2 rounded-xl text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                        title="删除摄像头"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-        </div>
-
-        {/* ================= COLUMN 3: REAL-TIME EVENT STREAM ================= */}
-        <div className="flex flex-col gap-8">
-          
-          {/* Live Alerts Stream Card */}
-          <div className="bg-neutral-800/60 border border-neutral-800/80 rounded-3xl p-5 shadow-2xl flex flex-col h-[520px] backdrop-blur-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2.5">
-                <span className={clsx(
-                  "h-2 w-2 rounded-full",
-                  wsConnected ? "bg-green-500 animate-pulse" : "bg-red-500 animate-ping"
-                )}></span>
-                <h2 className="font-semibold text-lg text-neutral-100">实时监控事件流</h2>
-              </div>
-              <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-neutral-950/60 border border-neutral-800 text-neutral-500 rounded-lg">
-                {wsConnected ? 'Connected' : 'Offline'}
-              </span>
-            </div>
-
-            {/* Event Alerts Container */}
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
-              {liveEvents.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-neutral-500 italic text-xs">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-500 mb-3"></div>
-                  等待摄像头推送实时告警事件...
-                </div>
-              ) : (
-                liveEvents.map((evt, idx) => {
-                  const isEnter = evt.event_type === 'enter';
-                  const isBendingOrSquat = evt.event_type === 'bending' || evt.event_type === 'crouching';
-                  return (
-                    <div 
-                      key={idx} 
-                      className={clsx(
-                        "p-3 rounded-2xl border text-xs flex flex-col gap-2 transition-all hover:scale-[1.01]",
-                        isEnter 
-                          ? "bg-green-950/15 border-green-800/40 text-green-300"
-                          : isBendingOrSquat
-                            ? "bg-amber-950/15 border-amber-800/40 text-amber-300"
-                            : "bg-neutral-900/50 border-neutral-800 text-neutral-300"
-                      )}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold uppercase tracking-wider">{evt.event_type}</span>
-                        <span className="font-mono opacity-60 text-[10px]">{formatTime(evt.timestamp)}</span>
-                      </div>
-                      <div>
-                        <span className="font-semibold text-neutral-100">{evt.person_name}</span>: {evt.behavior || '行为状态变化'}
-                      </div>
-                      <div className="flex justify-between items-center text-[10px] opacity-60">
-                        <span>设备: {evt.camera_name || '默认摄像头'}</span>
-                        <span>置信度: {Math.round(evt.confidence * 100)}%</span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Registered Personnel List Card */}
-          <div className="bg-neutral-800/60 border border-neutral-800/80 rounded-3xl p-5 shadow-2xl flex flex-col h-[400px] backdrop-blur-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-lg text-neutral-100 flex items-center gap-2">
-                <ShieldCheck size={20} className="text-green-400" />
-                注册人员管理
-              </h2>
-              <button
-                onClick={() => setIsRegisteringPerson(!isRegisteringPerson)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 rounded-xl text-xs font-semibold text-neutral-300 transition-colors"
-              >
-                <UserPlus size={14} />
-                注册
-              </button>
-            </div>
-
-            {/* Register form */}
-            {isRegisteringPerson ? (
-              <form onSubmit={handleRegisterPerson} className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-4 space-y-3 mb-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-neutral-500 font-semibold">姓名</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="姓名"
-                      value={newPerson.name}
-                      onChange={e => setNewPerson(prev => ({ ...prev, name: e.target.value }))}
-                      className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-none"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-neutral-500 font-semibold">部门</label>
-                    <input
-                      type="text"
-                      placeholder="IT运维部"
-                      value={newPerson.department}
-                      onChange={e => setNewPerson(prev => ({ ...prev, department: e.target.value }))}
-                      className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-none"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-neutral-500 font-semibold">角色</label>
-                    <select
-                      value={newPerson.role}
-                      onChange={e => setNewPerson(prev => ({ ...prev, role: e.target.value }))}
-                      className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-none cursor-pointer"
-                    >
-                      <option value="管理员">管理员</option>
-                      <option value="运维">运维人员</option>
-                      <option value="访客">访客</option>
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-neutral-500 font-semibold">正面人脸照</label>
-                    <input
-                      type="file"
-                      required
-                      accept="image/*"
-                      onChange={e => setFaceFile(e.target.files?.[0] || null)}
-                      className="text-[10px] text-neutral-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-purple-900/30 file:text-purple-300 hover:file:bg-purple-900/50 cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-1.5">
-                  <button
-                    type="submit"
-                    className="flex-1 py-1.5 bg-purple-600 text-white font-semibold text-xs rounded-xl hover:bg-purple-700 transition-colors"
-                  >
-                    提交注册
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsRegisteringPerson(false)}
-                    className="px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded-xl text-xs text-neutral-400 hover:text-neutral-200"
-                  >
-                    取消
-                  </button>
-                </div>
-              </form>
+          {/* Video Container */}
+          <div className="w-full aspect-video bg-neutral-950 rounded-2xl overflow-hidden flex items-center justify-center border border-neutral-800/80 relative shadow-inner">
+            {videoFeedUrl ? (
+              <img 
+                src={videoFeedUrl} 
+                alt="Live Camera Feed" 
+                className="w-full h-full object-contain"
+                onError={() => {
+                  console.error("MJPEG video stream connection lost");
+                }}
+              />
             ) : (
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
-                {persons.length === 0 ? (
-                  <div className="text-center py-8 text-neutral-600 text-xs italic">无注册人员信息</div>
+              <div className="text-center p-8 flex flex-col items-center">
+                <div className="p-4 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-500 mb-3">
+                  <Video size={36} />
+                </div>
+                {activeCamera ? (
+                  <>
+                    <p className="text-neutral-400 font-semibold mb-1">摄像头未启动</p>
+                    <p className="text-xs text-neutral-600 max-w-sm">
+                      点击右上方“启动检测”按钮开启 YOLOv8 +人脸+体态识别流
+                    </p>
+                  </>
                 ) : (
-                  persons.map(p => (
-                    <div key={p.id} className="flex items-center justify-between p-3 bg-neutral-900/40 border border-neutral-800/80 rounded-2xl hover:border-neutral-700 transition-all">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-500/20 to-pink-500/20 flex items-center justify-center text-purple-300 border border-purple-500/10 text-xs font-bold font-sans">
-                          {p.name.slice(0, 2)}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-xs text-neutral-200">{p.name}</div>
-                          <div className="text-[10px] text-neutral-500">{p.department} • {p.role}</div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleUnregisterPerson(p.id)}
-                        className="p-1 text-neutral-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                        title="注销人员"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))
+                  <p className="text-neutral-500 text-sm">请先添加或选择一个摄像头</p>
                 )}
               </div>
             )}
+
+            {/* Status overlay */}
+            {activeCamera?.is_running && (
+              <div className="absolute top-4 left-4 bg-black/60 px-3 py-1.5 rounded-lg border border-neutral-700 text-xs font-mono text-green-400 flex items-center gap-2 backdrop-blur-md">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-ping"></span>
+                <span>LIVE | FPS: {activeCamera.stats?.fps || 15} | 目标数: {activeCamera.stats?.current_persons || 0}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Live Alerts Stream Card (Spans 1 column) */}
+        <div className="bg-neutral-800/60 border border-neutral-800/80 rounded-3xl p-5 shadow-2xl flex flex-col h-[520px] backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2.5">
+              <span className={clsx(
+                "h-2 w-2 rounded-full",
+                wsConnected ? "bg-green-500 animate-pulse" : "bg-red-500 animate-ping"
+              )}></span>
+              <h2 className="font-semibold text-lg text-neutral-100">实时监控事件流</h2>
+            </div>
+            <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-neutral-950/60 border border-neutral-800 text-neutral-500 rounded-lg">
+              {wsConnected ? 'Connected' : 'Offline'}
+            </span>
           </div>
 
+          {/* Event Alerts Container */}
+          <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
+            {liveEvents.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-neutral-500 italic text-xs">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-500 mb-3"></div>
+                等待摄像头推送实时告警事件...
+              </div>
+            ) : (
+              liveEvents.map((evt, idx) => {
+                const isEnter = evt.event_type === 'enter';
+                const isBendingOrSquat = evt.event_type === 'bending' || evt.event_type === 'crouching';
+                return (
+                  <div 
+                    key={idx} 
+                    className={clsx(
+                      "p-3 rounded-2xl border text-xs flex flex-col gap-2 transition-all hover:scale-[1.01]",
+                      isEnter 
+                        ? "bg-green-950/15 border-green-800/40 text-green-300"
+                        : isBendingOrSquat
+                          ? "bg-amber-950/15 border-amber-800/40 text-amber-300"
+                          : "bg-neutral-900/50 border-neutral-800 text-neutral-300"
+                    )}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold uppercase tracking-wider">{evt.event_type}</span>
+                      <span className="font-mono opacity-60 text-[10px]">{formatTime(evt.timestamp)}</span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-neutral-100">{evt.person_name}</span>: {evt.behavior || '行为状态变化'}
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] opacity-60">
+                      <span>设备: {evt.camera_name || '默认摄像头'}</span>
+                      <span>置信度: {Math.round(evt.confidence * 100)}%</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
         {/* ================= HISTORICAL EVENT LOGS (FULL ROW) ================= */}
@@ -737,7 +511,7 @@ export default function MonitoringPage() {
                   events.map(evt => (
                     <tr key={evt.id} className="hover:bg-neutral-900/30 transition-colors">
                       <td className="p-4 font-mono text-neutral-400">
-                        {evt.timestamp ? new Date(evt.timestamp).toLocaleString() : 'N/A'}
+                        {evt.timestamp ? parseUTC(evt.timestamp).toLocaleString() : 'N/A'}
                       </td>
                       <td className="p-4 text-neutral-200 font-medium">{evt.camera_name}</td>
                       <td className="p-4 text-neutral-200">{evt.person_name}</td>
@@ -775,6 +549,228 @@ export default function MonitoringPage() {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Camera Management Panel (Spans 2 columns, placed below historical logs) */}
+        <div className="lg:col-span-2 bg-neutral-800/60 border border-neutral-800/80 rounded-3xl p-5 shadow-2xl backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+            <h2 className="font-semibold text-lg text-neutral-100 flex items-center gap-2">
+              <Video size={20} className="text-purple-400" />
+              摄像头设备管理
+            </h2>
+            <button
+              onClick={() => setIsAddingCamera(!isAddingCamera)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 rounded-xl text-xs font-semibold text-neutral-300 transition-colors"
+            >
+              <Plus size={14} />
+              添加摄像头
+            </button>
+          </div>
+
+          {/* Add Camera Form */}
+          {isAddingCamera && (
+            <form onSubmit={handleCreateCamera} className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-5 mb-5 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] text-neutral-500 font-semibold uppercase tracking-wider">摄像头名称</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 机房主门"
+                    value={newCamera.name}
+                    onChange={e => setNewCamera(prev => ({ ...prev, name: e.target.value }))}
+                    className="bg-neutral-950 border border-neutral-800 hover:border-neutral-700 rounded-xl px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:ring-1 focus:ring-purple-500 h-10 w-full"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] text-neutral-500 font-semibold uppercase tracking-wider">视频源 (0 或 RTSP地址)</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="0 或 rtsp://..."
+                    value={newCamera.source}
+                    onChange={e => setNewCamera(prev => ({ ...prev, source: e.target.value }))}
+                    className="bg-neutral-950 border border-neutral-800 hover:border-neutral-700 rounded-xl px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:ring-1 focus:ring-purple-500 h-10 w-full"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] text-neutral-500 font-semibold uppercase tracking-wider">安装位置</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 柜台、机架区"
+                    value={newCamera.location}
+                    onChange={e => setNewCamera(prev => ({ ...prev, location: e.target.value }))}
+                    className="bg-neutral-950 border border-neutral-800 hover:border-neutral-700 rounded-xl px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:ring-1 focus:ring-purple-500 h-10 w-full"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCamera(false)}
+                  className="w-[104px] h-10 flex items-center justify-center bg-neutral-800/80 border border-neutral-700 hover:bg-neutral-700/60 text-neutral-300 text-sm font-semibold rounded-xl transition-colors active:scale-95 whitespace-nowrap"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="w-24 h-10 flex items-center justify-center bg-purple-600 text-white font-semibold text-sm rounded-xl hover:bg-purple-700 transition-colors shadow-md shadow-purple-500/10 active:scale-95 whitespace-nowrap"
+                >
+                  提交
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Cameras Table List */}
+          <div className="space-y-3">
+            {cameras.length === 0 ? (
+              <div className="text-center py-6 text-neutral-600 text-xs italic">无摄像头设备，请添加</div>
+            ) : (
+              cameras.map(cam => (
+                <div key={cam.id} className="flex items-center justify-between p-3 bg-neutral-900/40 border border-neutral-800/80 rounded-2xl hover:border-neutral-700 transition-all flex-wrap gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className={clsx(
+                      "h-3 w-3 rounded-full shrink-0",
+                      cam.is_running ? "bg-green-500 animate-pulse" : "bg-neutral-600"
+                    )}></div>
+                    <div>
+                      <div className="font-semibold text-sm text-neutral-200">{cam.name}</div>
+                      <div className="text-xs text-neutral-500 font-mono truncate max-w-[200px] md:max-w-xs">{cam.source}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {cam.location && (
+                      <span className="text-xs px-2.5 py-1 rounded-lg bg-neutral-950/60 border border-neutral-800 text-neutral-400">
+                        {cam.location}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleDeleteCamera(cam.id)}
+                      className="p-2 rounded-xl text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                      title="删除摄像头"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Registered Personnel List Card (Spans 1 column, placed below historical logs) */}
+        <div className="bg-neutral-800/60 border border-neutral-800/80 rounded-3xl p-5 shadow-2xl flex flex-col h-[400px] backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-lg text-neutral-100 flex items-center gap-2">
+              <ShieldCheck size={20} className="text-green-400" />
+              注册人员管理
+            </h2>
+            <button
+              onClick={() => setIsRegisteringPerson(!isRegisteringPerson)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 rounded-xl text-xs font-semibold text-neutral-300 transition-colors"
+            >
+              <UserPlus size={14} />
+              注册
+            </button>
+          </div>
+
+          {/* Register form */}
+          {isRegisteringPerson ? (
+            <form onSubmit={handleRegisterPerson} className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-4 space-y-3 mb-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-neutral-500 font-semibold">姓名</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="姓名"
+                    value={newPerson.name}
+                    onChange={e => setNewPerson(prev => ({ ...prev, name: e.target.value }))}
+                    className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-neutral-500 font-semibold">部门</label>
+                  <input
+                    type="text"
+                    placeholder="IT运维部"
+                    value={newPerson.department}
+                    onChange={e => setNewPerson(prev => ({ ...prev, department: e.target.value }))}
+                    className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-none"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-neutral-500 font-semibold">角色</label>
+                  <select
+                    value={newPerson.role}
+                    onChange={e => setNewPerson(prev => ({ ...prev, role: e.target.value }))}
+                    className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-none cursor-pointer"
+                  >
+                    <option value="管理员">管理员</option>
+                    <option value="运维">运维人员</option>
+                    <option value="访客">访客</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-neutral-500 font-semibold">正面人脸照</label>
+                  <input
+                    type="file"
+                    required
+                    accept="image/*"
+                    onChange={e => setFaceFile(e.target.files?.[0] || null)}
+                    className="text-[10px] text-neutral-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-purple-900/30 file:text-purple-300 hover:file:bg-purple-950/50 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-1.5">
+                <button
+                  type="submit"
+                  className="flex-1 py-1.5 bg-purple-600 text-white font-semibold text-xs rounded-xl hover:bg-purple-700 transition-colors"
+                >
+                  提交注册
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsRegisteringPerson(false)}
+                  className="px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded-xl text-xs text-neutral-400 hover:text-neutral-200"
+                >
+                  取消
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
+              {persons.length === 0 ? (
+                <div className="text-center py-8 text-neutral-600 text-xs italic">无注册人员信息</div>
+              ) : (
+                persons.map(p => (
+                  <div key={p.id} className="flex items-center justify-between p-3 bg-neutral-900/40 border border-neutral-800/80 rounded-2xl hover:border-neutral-700 transition-all">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-500/20 to-pink-500/20 flex items-center justify-center text-purple-300 border border-purple-500/10 text-xs font-bold font-sans">
+                        {p.name.slice(0, 2)}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-xs text-neutral-200">{p.name}</div>
+                        <div className="text-[10px] text-neutral-500">{p.department} • {p.role}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleUnregisterPerson(p.id)}
+                      className="p-1 text-neutral-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                      title="注销人员"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
       </main>

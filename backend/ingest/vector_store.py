@@ -27,8 +27,10 @@ def setup_chroma():
     
     # Use a high quality, free local model
     # all-MiniLM-L6-v2 is the default for Chroma but explicit is better
+    local_model_path = os.path.join(os.getcwd(), "data", "all-MiniLM-L6-v2")
+    model_identifier = local_model_path if os.path.exists(local_model_path) else "all-MiniLM-L6-v2"
     ef = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name="all-MiniLM-L6-v2"
+        model_name=model_identifier
     )
     
     collection = client.get_or_create_collection(

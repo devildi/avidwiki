@@ -151,6 +151,20 @@ class AvidCrawler:
                     self.interruptible_sleep(3, stop_event)
                     self.check_for_captcha(max_wait_seconds=60)
                     
+                    # 检查是否发生跳转，并永久删除跳转的源
+                    from urllib.parse import urlparse
+                    parsed_start = urlparse(start_url)
+                    parsed_current = urlparse(self.driver.current_url)
+                    
+                    start_path = parsed_start.path.rstrip('/')
+                    current_path = parsed_current.path.rstrip('/')
+                    
+                    if parsed_start.netloc != parsed_current.netloc or start_path != current_path:
+                        log(f"⚠️ 检测到数据源发生跳转: {start_url} -> {self.driver.current_url}")
+                        log(f"🗑️ 正在从数据库中永久删除该源。")
+                        db.avid_sources.delete_one({"url": start_url})
+                        continue
+                    
                     # Extract total pages
                     try:
                         paging_area = self.driver.find_element(By.CSS_SELECTOR, ".CommonPagingArea")
@@ -319,6 +333,18 @@ class AvidCrawler:
         
         if not success:
             print(f"  ❌ Failed to load thread details after {max_retries} attempts.")
+            return
+
+        # 检查主题页是否发生跳转（例如跳转到登录页或已删除提示页），若跳转则跳过该主题
+        from urllib.parse import urlparse
+        parsed_start = urlparse(url)
+        parsed_current = urlparse(self.driver.current_url)
+        
+        start_path = parsed_start.path.rstrip('/')
+        current_path = parsed_current.path.rstrip('/')
+        
+        if parsed_start.netloc != parsed_current.netloc or start_path != current_path:
+            print(f"  ⚠️ 发现主题帖发生跳转: {url} -> {self.driver.current_url}，已跳过。")
             return
 
         try:

@@ -26,6 +26,9 @@ load_dotenv()
 # Configure Hugging Face mirror (for users in China or with network issues)
 os.environ['HF_ENDPOINT'] = os.getenv('HF_ENDPOINT', 'https://hf-mirror.com')
 
+# Suppress C++ logging from MediaPipe (glog) to clean up terminal output
+os.environ["GLOG_minloglevel"] = "2"
+
 # Configure logging
 log_dir = os.path.dirname(os.path.abspath(__file__))
 log_file = os.path.join(log_dir, "api.log")
@@ -90,8 +93,11 @@ def get_collection():
                 os.makedirs(CHROMA_PATH)
 
             chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
+            # Use local model directory if exists to prevent download and mirror connection issues
+            local_model_path = os.path.join(os.getcwd(), "data", "all-MiniLM-L6-v2")
+            model_identifier = local_model_path if os.path.exists(local_model_path) else "all-MiniLM-L6-v2"
             ef = embedding_functions.SentenceTransformerEmbeddingFunction(
-                model_name="all-MiniLM-L6-v2"
+                model_name=model_identifier
             )
             collection = chroma_client.get_or_create_collection(
                 name="avid_posts",

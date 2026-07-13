@@ -15,7 +15,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # 项目根目录
-PROJECT_DIR="/Users/DevilDI/Desktop/projects/wiki"
+PROJECT_DIR="/Users/DevilDI/Desktop/projects/avidwiki"
 cd "$PROJECT_DIR" || exit 1
 
 echo -e "${YELLOW}步骤 1: 安装 Python 依赖${NC}"

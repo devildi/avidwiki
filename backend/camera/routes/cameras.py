@@ -118,7 +118,7 @@ def start_camera(camera_id: int, db: Session = Depends(get_db)):
         pipeline.start()
         return {"message": f"摄像头 {camera.name} 已启动"}
     except Exception as e:
-        return {"message": f"启动失败: {e}", "error": True}
+        raise HTTPException(status_code=400, detail=f"启动失败: {str(e)}")
 
 
 @router.post("/cameras/{camera_id}/stop")
@@ -130,3 +130,20 @@ def stop_camera(camera_id: int, db: Session = Depends(get_db)):
 
     pipeline.stop()
     return {"message": "摄像头已停止"}
+
+
+@router.get("/cameras/detect")
+def detect_local_cameras():
+    """检测本机可用的摄像头设备"""
+    import cv2
+    available = []
+    # 快速检测索引 0 到 4 的摄像头
+    for index in range(5):
+        cap = cv2.VideoCapture(index)
+        if cap is not None and cap.isOpened():
+            available.append({
+                "id": str(index),
+                "name": f"默认摄像头 / 电脑自带 (设备 {index})" if index == 0 else f"USB 外接摄像头 (设备 {index})"
+            })
+            cap.release()
+    return {"devices": available}

@@ -14,7 +14,7 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-PROJECT_DIR="/Users/DevilDI/Desktop/projects/wiki"
+PROJECT_DIR="/Users/DevilDI/Desktop/projects/avidwiki"
 cd "$PROJECT_DIR" || exit 1
 
 # 检查后端进程
@@ -63,6 +63,10 @@ echo ""
 echo -e "${GREEN}启动前端服务...${NC}"
 # 启动前端（后台运行）
 cd frontend
+if [ -f "$HOME/.nvm/nvm.sh" ]; then
+    . "$HOME/.nvm/nvm.sh"
+    nvm use 20 2>/dev/null || nvm use default 2>/dev/null
+fi
 nohup npm run dev > ../frontend_debug.log 2>&1 &
 FRONTEND_PID=$!
 cd ..

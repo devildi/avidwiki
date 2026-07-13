@@ -76,7 +76,7 @@ def debug_page_structure(url):
             print(f"  Found: {len(rows3)} rows")
 
         # Save page source for inspection
-        with open("/Users/DevilDI/Desktop/projects/wiki/backend/crawler/page_source.html", "w", encoding="utf-8") as f:
+        with open("/Users/DevilDI/Desktop/projects/avidwiki/backend/crawler/page_source.html", "w", encoding="utf-8") as f:
             f.write(driver.page_source)
         print("\nPage source saved to: backend/crawler/page_source.html")
 

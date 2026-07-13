@@ -54,3 +54,8 @@ data/chroma_db/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local environment and data
+.venv/
+data/
+mongodb-server/

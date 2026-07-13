@@ -47,7 +47,7 @@ echo ""
 
 # 5. 清理项目Python缓存（可选，很小）
 echo "5️⃣ 清理 Python __pycache__..."
-find /Users/DevilDI/Desktop/projects/wiki -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+find /Users/DevilDI/Desktop/projects/avidwiki -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
 echo "   ✅ Python 缓存清理完成"
 echo ""
 

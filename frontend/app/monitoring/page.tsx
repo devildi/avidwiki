@@ -56,6 +56,10 @@ export default function MonitoringPage() {
   
   // Forms
   const [newCamera, setNewCamera] = useState({ name: '', source: '0', location: '' });
+  const [sourceType, setSourceType] = useState<'local' | 'rtsp'>('local');
+  const [detectedDevices, setDetectedDevices] = useState<{ id: string; name: string }[]>([]);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [cameraActionLoadingId, setCameraActionLoadingId] = useState<number | null>(null);
   const [newPerson, setNewPerson] = useState({ name: '', department: '', role: '运维' });
   const [faceFile, setFaceFile] = useState<File | null>(null);
   
@@ -102,6 +106,26 @@ export default function MonitoringPage() {
     } catch (error) {
       console.error("Failed to fetch camera monitoring data:", error);
       setErrorMsg("连接后端API服务失败，请确认后端运行在端口 8000");
+    }
+  };
+
+  const detectCameras = async () => {
+    setIsDetecting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/cameras/detect`);
+      if (res.ok) {
+        const data = await res.json();
+        setDetectedDevices(data.devices || []);
+        if (data.devices && data.devices.length > 0) {
+          setNewCamera(prev => ({ ...prev, source: data.devices[0].id }));
+        } else {
+          setNewCamera(prev => ({ ...prev, source: '' }));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to detect cameras:", e);
+    } finally {
+      setIsDetecting(false);
     }
   };
 
@@ -177,17 +201,25 @@ export default function MonitoringPage() {
 
   // Camera Management Handlers
   const handleStartCamera = async (id: number) => {
+    setCameraActionLoadingId(id);
     try {
       const res = await fetch(`${API_BASE}/api/cameras/${id}/start`, { method: 'POST' });
       if (res.ok) {
         fetchData();
+      } else {
+        const errorData = await res.json();
+        alert(errorData.detail || "启动摄像头失败，请检查摄像头设备连接或系统权限");
       }
     } catch (e) {
       console.error(e);
+      alert("连接服务器失败，请确保后端服务正常运行");
+    } finally {
+      setCameraActionLoadingId(null);
     }
   };
 
   const handleStopCamera = async (id: number) => {
+    setCameraActionLoadingId(id);
     try {
       const res = await fetch(`${API_BASE}/api/cameras/${id}/stop`, { method: 'POST' });
       if (res.ok) {
@@ -195,6 +227,8 @@ export default function MonitoringPage() {
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setCameraActionLoadingId(null);
     }
   };
 
@@ -363,15 +397,23 @@ export default function MonitoringPage() {
 
               {activeCamera && (
                 <button
+                  disabled={cameraActionLoadingId !== null}
                   onClick={() => activeCamera.is_running ? handleStopCamera(activeCamera.id) : handleStartCamera(activeCamera.id)}
                   className={clsx(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 shadow-md",
-                    activeCamera.is_running
-                      ? "bg-red-600/90 hover:bg-red-700/90 text-white shadow-red-500/10"
-                      : "bg-purple-600/90 hover:bg-purple-700/90 text-white shadow-purple-500/10"
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-md",
+                    cameraActionLoadingId !== null
+                      ? "bg-neutral-800 text-neutral-500 border border-neutral-700 cursor-not-allowed"
+                      : activeCamera.is_running
+                        ? "bg-red-600/90 hover:bg-red-700/90 text-white shadow-red-500/10 active:scale-95"
+                        : "bg-purple-600/90 hover:bg-purple-700/90 text-white shadow-purple-500/10 active:scale-95"
                   )}
                 >
-                  {activeCamera.is_running ? (
+                  {cameraActionLoadingId === activeCamera.id ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      <span>处理中...</span>
+                    </>
+                  ) : activeCamera.is_running ? (
                     <>
                       <Square size={14} fill="white" />
                       <span>停止检测</span>
@@ -559,7 +601,12 @@ export default function MonitoringPage() {
               摄像头设备管理
             </h2>
             <button
-              onClick={() => setIsAddingCamera(!isAddingCamera)}
+              onClick={() => {
+                if (!isAddingCamera) {
+                  detectCameras();
+                }
+                setIsAddingCamera(!isAddingCamera);
+              }}
               className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 rounded-xl text-xs font-semibold text-neutral-300 transition-colors"
             >
               <Plus size={14} />
@@ -570,7 +617,41 @@ export default function MonitoringPage() {
           {/* Add Camera Form */}
           {isAddingCamera && (
             <form onSubmit={handleCreateCamera} className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-5 mb-5 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* 设备类型选择 */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-neutral-400 font-semibold uppercase tracking-wider">设备类型:</span>
+                <div className="flex bg-neutral-950 p-0.5 rounded-lg border border-neutral-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSourceType('local');
+                      setNewCamera(prev => ({ ...prev, source: '0' }));
+                    }}
+                    className={clsx(
+                      "px-3 py-1 text-xs font-semibold rounded-md transition-colors",
+                      sourceType === 'local' ? "bg-purple-600 text-white" : "text-neutral-400 hover:text-neutral-200"
+                    )}
+                  >
+                    本机摄像头 (电脑自带/USB)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSourceType('rtsp');
+                      setNewCamera(prev => ({ ...prev, source: '' }));
+                    }}
+                    className={clsx(
+                      "px-3 py-1 text-xs font-semibold rounded-md transition-colors",
+                      sourceType === 'rtsp' ? "bg-purple-600 text-white" : "text-neutral-400 hover:text-neutral-200"
+                    )}
+                  >
+                    网络摄像机 (RTSP 视频流)
+                  </button>
+                </div>
+              </div>
+
+              {/* 三个输入框 */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11px] text-neutral-500 font-semibold uppercase tracking-wider">摄像头名称</label>
                   <input
@@ -583,15 +664,42 @@ export default function MonitoringPage() {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] text-neutral-500 font-semibold uppercase tracking-wider">视频源 (0 或 RTSP地址)</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="0 或 rtsp://..."
-                    value={newCamera.source}
-                    onChange={e => setNewCamera(prev => ({ ...prev, source: e.target.value }))}
-                    className="bg-neutral-950 border border-neutral-800 hover:border-neutral-700 rounded-xl px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:ring-1 focus:ring-purple-500 h-10 w-full"
-                  />
+                  <label className="text-[11px] text-neutral-500 font-semibold uppercase tracking-wider">
+                    {sourceType === 'local' ? '选择设备' : '视频源地址 (RTSP)'}
+                  </label>
+                  {sourceType === 'local' ? (
+                    isDetecting ? (
+                      <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-neutral-400 h-10 w-full flex items-center justify-center gap-2">
+                        <RefreshCw size={14} className="animate-spin text-purple-400" />
+                        正在检测系统摄像头...
+                      </div>
+                    ) : detectedDevices.length > 0 ? (
+                      <select
+                        value={newCamera.source}
+                        onChange={e => setNewCamera(prev => ({ ...prev, source: e.target.value }))}
+                        className="bg-neutral-950 border border-neutral-800 hover:border-neutral-700 rounded-xl px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:ring-1 focus:ring-purple-500 h-10 w-full"
+                      >
+                        {detectedDevices.map(device => (
+                          <option key={device.id} value={device.id}>
+                            {device.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="bg-neutral-950 border border-amber-800/40 rounded-xl px-3 py-2.5 text-xs text-amber-500/80 h-10 w-full flex items-center justify-center font-medium">
+                        ⚠️ 未检测到可用的本机摄像头
+                      </div>
+                    )
+                  ) : (
+                    <input
+                      type="text"
+                      required
+                      placeholder="rtsp://username:password@ip:port/h264"
+                      value={newCamera.source}
+                      onChange={e => setNewCamera(prev => ({ ...prev, source: e.target.value }))}
+                      className="bg-neutral-950 border border-neutral-800 hover:border-neutral-700 rounded-xl px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:ring-1 focus:ring-purple-500 h-10 w-full"
+                    />
+                  )}
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11px] text-neutral-500 font-semibold uppercase tracking-wider">安装位置</label>

@@ -18,6 +18,8 @@ _mp_pose = None
 def _get_mediapipe():
     global _mp, _mp_pose
     if _mp is None:
+        import os
+        os.environ["GLOG_minloglevel"] = "2"
         import mediapipe as mp
         _mp = mp
         _mp_pose = mp.solutions.pose

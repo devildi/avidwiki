@@ -25,6 +25,9 @@ load_dotenv()
 
 # Configure Hugging Face mirror (for users in China or with network issues)
 os.environ['HF_ENDPOINT'] = os.getenv('HF_ENDPOINT', 'https://hf-mirror.com')
+# 强制开启 HuggingFace 离线模式，避免由于镜像站连接重置（Connection Reset）导致启动卡顿和重试报错
+os.environ['HF_HUB_OFFLINE'] = '1'
+os.environ['TRANSFORMERS_OFFLINE'] = '1'
 
 # Suppress C++ logging from MediaPipe (glog) to clean up terminal output
 os.environ["GLOG_minloglevel"] = "2"
@@ -144,15 +147,42 @@ def save_event_to_db(event_data: dict):
 connected_websockets = set()
 
 
+def clean_for_json(obj):
+    import numpy as np
+    if isinstance(obj, dict):
+        return {k: clean_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, set)):
+        return [clean_for_json(x) for x in obj]
+    elif isinstance(obj, np.ndarray):
+        return clean_for_json(obj.tolist())
+    elif isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
+        return float(obj)
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
+    return obj
+
+
 async def broadcast_event(event_data: dict):
     """通过 WebSocket 广播事件到所有前端客户端"""
+    global connected_websockets
     import json
-    message = json.dumps(event_data, ensure_ascii=False)
+    try:
+        clean_data = clean_for_json(event_data)
+        message = json.dumps(clean_data, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"事件 JSON 序列化失败: {e}, 原始数据: {event_data}")
+        return
+
+    logger.info(f"【WebSocket广播】正在尝试向 {len(connected_websockets)} 个客户端发送事件数据...")
     disconnected = set()
     for ws in connected_websockets:
         try:
             await ws.send_text(message)
-        except Exception:
+            logger.info(f"【WebSocket广播】成功将事件推送给客户端: {ws.client}")
+        except Exception as e:
+            logger.warning(f"【WebSocket广播】推送失败，客户端可能已断开: {e}")
             disconnected.add(ws)
     connected_websockets -= disconnected
 
@@ -162,20 +192,41 @@ main_loop = None
 
 def on_pipeline_event(event_data: dict):
     """管道事件回调（在工作线程中调用）"""
+    logger.info(f"【管道事件】触发新事件: {event_data.get('event_type')}, 人员: {event_data.get('person_name')}")
     save_event_to_db(event_data)
     global main_loop
     if main_loop and main_loop.is_running():
-        asyncio.run_coroutine_threadsafe(broadcast_event(event_data), main_loop)
+        logger.info(f"【管道事件】主事件循环正常，投递广播协程中。当前活跃WebSocket连接数: {len(connected_websockets)}")
+        future = asyncio.run_coroutine_threadsafe(broadcast_event(event_data), main_loop)
+        
+        def future_done_callback(fut):
+            try:
+                fut.result()
+                logger.info("【管道事件】广播协程在事件循环中执行成功。")
+            except Exception as e:
+                logger.error(f"【管道事件】广播协程执行失败: {e}", exc_info=True)
+                
+        future.add_done_callback(future_done_callback)
     else:
-        logger.warning("主事件循环未运行，无法广播事件")
+        logger.warning(f"【管道事件】警告: 主事件循环未运行(main_loop={main_loop})，无法广播事件")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global main_loop
     main_loop = asyncio.get_running_loop()
-    # Startup logic
-    get_collection()
+    
+    # 在后台异步启动 ChromaDB 和 SentenceTransformer 模型加载，避免阻塞 API 启动
+    import threading
+    def load_chroma_bg():
+        try:
+            logger.info("开始在后台加载 ChromaDB 与 SentenceTransformer 模型...")
+            get_collection()
+            logger.info("ChromaDB 与 SentenceTransformer 模型后台加载完成。")
+        except Exception as e:
+            logger.error(f"后台加载 ChromaDB 失败: {e}", exc_info=True)
+
+    threading.Thread(target=load_chroma_bg, daemon=True).start()
     
     # Initialize PDF database tables
     import pdf_schema
@@ -220,10 +271,238 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Avid MC RAG API", lifespan=lifespan)
 
-# Mount snapshots directory
-snapshots_dir = os.path.join(os.getcwd(), 'data', 'camera', 'snapshots')
-os.makedirs(snapshots_dir, exist_ok=True)
-app.mount("/snapshots", StaticFiles(directory=snapshots_dir), name="snapshots")
+# Dynamic snapshots serving route (allows changing path at runtime)
+@app.get("/snapshots/{filename}")
+def get_snapshot_file(filename: str):
+    import config
+    from fastapi.responses import FileResponse
+    file_path = config.SNAPSHOTS_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="截图文件不存在")
+    return FileResponse(str(file_path))
+
+# Snapshot path settings API endpoints
+class SnapshotPathUpdate(BaseModel):
+    path: str
+
+@app.get("/api/camera-settings/snapshot-path")
+def get_snapshot_path():
+    import config
+    return {"path": str(config.SNAPSHOTS_DIR)}
+
+@app.post("/api/camera-settings/snapshot-path")
+def update_snapshot_path(req: SnapshotPathUpdate):
+    import config
+    path_str = req.path.strip()
+    if not path_str:
+        raise HTTPException(status_code=400, detail="路径不能为空")
+    try:
+        config.save_snapshots_dir(path_str)
+        return {"status": "success", "path": str(config.SNAPSHOTS_DIR)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存路径失败: {str(e)}")
+
+class ListDirsRequest(BaseModel):
+    path: str = ""
+
+@app.post("/api/camera-settings/list-dirs")
+def list_directories(req: ListDirsRequest):
+    import os
+    from pathlib import Path
+    target_path_str = req.path.strip()
+    if not target_path_str:
+        # Default to the current snapshot dir if it exists, otherwise home folder
+        import config
+        if config.SNAPSHOTS_DIR.exists():
+            target_path = config.SNAPSHOTS_DIR
+        else:
+            target_path = Path.home()
+    else:
+        target_path = Path(target_path_str)
+        
+    if not target_path.exists():
+        target_path = Path.home()
+        
+    if not target_path.is_dir():
+        target_path = target_path.parent
+        
+    try:
+        subdirs = []
+        for name in os.listdir(target_path):
+            if name.startswith('.'):
+                continue
+            try:
+                full_path = target_path / name
+                if full_path.is_dir():
+                    subdirs.append(name)
+            except Exception:
+                pass
+        
+        subdirs.sort()
+        parent_path = str(target_path.parent) if target_path != target_path.parent else str(target_path)
+        
+        return {
+            "current_path": str(target_path),
+            "parent_path": parent_path,
+            "subdirs": subdirs
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取目录失败: {str(e)}")
+
+@app.get("/api/status")
+def get_system_status():
+    global collection
+    is_ready = collection is not None
+    return {
+        "status": "ready" if is_ready else "loading",
+        "message": "正在加载 AI 向量分析模型 (all-MiniLM-L6-v2)，这在首次启动或重启时可能需要 10-30 秒，请稍候..."
+    }
+
+
+# ==================== AI Model Training & Labeling APIs ====================
+is_training_active = False
+
+@app.get("/body-crops/{filename}")
+def get_body_crop(filename: str):
+    from fastapi.responses import FileResponse
+    from pathlib import Path
+    filepath = Path("data/camera/body_dataset/collector") / filename
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="Crop file not found")
+    return FileResponse(str(filepath))
+
+@app.get("/api/training/unlabeled")
+def list_unlabeled_crops():
+    from pathlib import Path
+    collector_dir = Path("data/camera/body_dataset/collector")
+    if not collector_dir.exists():
+        return {"items": []}
+    try:
+        files = [f.name for f in collector_dir.iterdir() if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+        files.sort(key=lambda x: (collector_dir / x).stat().st_mtime, reverse=True)
+        return {"items": files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/training/labels")
+def list_training_labels():
+    from pathlib import Path
+    labeled_dir = Path("data/camera/body_dataset/labeled")
+    if not labeled_dir.exists():
+        return {"labels": []}
+    try:
+        labels = [d.name for d in labeled_dir.iterdir() if d.is_dir()]
+        labels.sort()
+        return {"labels": labels}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class LabelCropRequest(BaseModel):
+    filename: str
+    label: str
+
+@app.post("/api/training/label")
+def label_crop_file(req: LabelCropRequest):
+    import shutil
+    from pathlib import Path
+    collector_dir = Path("data/camera/body_dataset/collector")
+    labeled_dir = Path("data/camera/body_dataset/labeled")
+    
+    src_file = collector_dir / req.filename
+    if not src_file.exists():
+        raise HTTPException(status_code=404, detail="Source crop image not found")
+        
+    label_clean = req.label.strip()
+    if not label_clean:
+        raise HTTPException(status_code=400, detail="Label name cannot be empty")
+        
+    target_dir = labeled_dir / label_clean
+    target_dir.mkdir(parents=True, exist_ok=True)
+    
+    dest_file = target_dir / req.filename
+    try:
+        shutil.move(str(src_file), str(dest_file))
+        return {"status": "success", "message": f"Successfully labeled as {label_clean}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to move file: {e}")
+
+@app.post("/api/training/train")
+def start_model_training():
+    global is_training_active
+    if is_training_active:
+        return {"status": "error", "message": "训练已在进行中，请勿重复启动"}
+        
+    from pathlib import Path
+    labeled_dir = Path("data/camera/body_dataset/labeled")
+    has_data = False
+    if labeled_dir.exists():
+        for d in labeled_dir.iterdir():
+            if d.is_dir():
+                imgs = [f for f in d.iterdir() if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+                if len(imgs) > 0:
+                    has_data = True
+                    break
+    if not has_data:
+        raise HTTPException(status_code=400, detail="请至少完成一个类别并且包含照片的打标再进行训练！")
+        
+    is_training_active = True
+    
+    def run_training():
+        global is_training_active
+        import sys
+        import subprocess
+        import threading
+        log_path = Path("data/camera/body_dataset/training.log")
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            with open(log_path, "w", encoding="utf-8") as log_file:
+                log_file.write("=== 开始体态分类模型训练 ===\n")
+                log_file.flush()
+                
+                script_path = Path("backend/camera/train_classifier.py").resolve()
+                process = subprocess.Popen(
+                    [sys.executable, str(script_path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    universal_newlines=True
+                )
+                
+                for line in process.stdout:
+                    log_file.write(line)
+                    log_file.flush()
+                    
+                process.wait()
+                log_file.write(f"\n=== 训练结束，退出状态码: {process.returncode} ===\n")
+                log_file.flush()
+        except Exception as e:
+            logger.error(f"训练线程执行异常: {e}", exc_info=True)
+        finally:
+            is_training_active = False
+
+    import threading
+    threading.Thread(target=run_training, daemon=True).start()
+    return {"status": "started", "message": "模型训练已启动"}
+
+@app.get("/api/training/status")
+def get_training_status():
+    global is_training_active
+    from pathlib import Path
+    log_path = Path("data/camera/body_dataset/training.log")
+    log_content = ""
+    if log_path.exists():
+        try:
+            with open(log_path, "r", encoding="utf-8") as f:
+                log_content = f.read()
+        except Exception as e:
+            log_content = f"读取日志错误: {e}"
+    return {
+        "is_training": is_training_active,
+        "logs": log_content
+    }
+
 
 # Include camera routes
 from routes import cameras as camera_routes
@@ -241,8 +520,12 @@ app.include_router(camera_stream_routes.router, prefix="/api", tags=["视频流"
 async def websocket_events(websocket: WebSocket):
     """实时事件推送 WebSocket"""
     await websocket.accept()
+    
+    global main_loop
+    main_loop = asyncio.get_running_loop()
+    logger.info(f"WebSocket 客户端已连接，成功捕获当前活跃事件循环: {main_loop} (当前总连接数: {len(connected_websockets) + 1})")
+    
     connected_websockets.add(websocket)
-    logger.info(f"WebSocket 客户端已连接 (总: {len(connected_websockets)})")
     try:
         while True:
             # 保持连接，等待客户端消息
@@ -887,4 +1170,13 @@ async def stream_indexing_progress(pdf_id: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=False)
+    from pathlib import Path
+    # 只监控 backend/ 目录下的代码变动，防止 database 和 snapshots 变动引发 Uvicorn 频繁重载而中断 WebSocket
+    backend_dir = Path(__file__).resolve().parent.parent
+    uvicorn.run(
+        "backend.api.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        reload_dirs=[str(backend_dir)]
+    )

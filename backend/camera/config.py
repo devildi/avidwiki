@@ -8,8 +8,41 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = BASE_DIR / "data" / "camera"
 FACES_DIR = DATA_DIR / "faces"
-SNAPSHOTS_DIR = DATA_DIR / "snapshots"
+
+# 从 settings.json 读取持久化的截图路径，如果没有则读取环境变量或默认路径
+SETTINGS_FILE = DATA_DIR / "settings.json"
+default_snapshots_dir = os.getenv("CAMERA_SNAPSHOTS_DIR", str(DATA_DIR / "snapshots"))
+snapshots_dir_path = default_snapshots_dir
+
+if SETTINGS_FILE.exists():
+    try:
+        import json
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            settings = json.load(f)
+            snapshots_dir_path = settings.get("snapshots_dir", default_snapshots_dir)
+    except Exception:
+        pass
+
+SNAPSHOTS_DIR = Path(snapshots_dir_path)
 MODELS_DIR = BASE_DIR
+
+def save_snapshots_dir(new_path: str):
+    global SNAPSHOTS_DIR
+    import json
+    SNAPSHOTS_DIR = Path(new_path)
+    SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    
+    settings = {}
+    if SETTINGS_FILE.exists():
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+        except Exception:
+            pass
+            
+    settings["snapshots_dir"] = new_path
+    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(settings, f, ensure_ascii=False, indent=4)
 
 # 确保目录存在
 for d in [DATA_DIR, FACES_DIR, SNAPSHOTS_DIR]:

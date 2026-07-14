@@ -97,6 +97,11 @@ class DetectionPipeline:
         self.face_recognizer = FaceRecognizer()
         self.pose_analyzer = PoseAnalyzer()
 
+        # 初始化自定义体态分类器（YOLOv8-Cls）
+        self.body_classifier = None
+        self.body_classes = []
+        self._load_body_classifier()
+
         # 视频流
         self.video_stream: Optional[VideoStream] = None
 
@@ -162,6 +167,7 @@ class DetectionPipeline:
             # 0. 定期更新注册人员特征缓存（每 8 秒）
             if time.time() - self._last_cache_update > 8.0:
                 self._update_registered_persons_cache()
+                self._load_body_classifier()
 
             ret, frame = self.video_stream.read()
             if not ret or frame is None:
@@ -182,6 +188,7 @@ class DetectionPipeline:
                 face_counter = 0
                 self._do_face_recognition(frame, tracked)
                 self._do_body_reid(frame, tracked)
+                self._do_custom_body_classification(frame, tracked)
 
             # 4. 姿态分析与行为识别
             for det in tracked:
@@ -196,6 +203,12 @@ class DetectionPipeline:
                 track = self.tracker.get_track(track_id)
                 if track:
                     track.behavior = pose_result["behavior_cn"]
+                    # ─── 数据自动收集：保存人体裁剪图 ───
+                    if not hasattr(track, 'crop_save_count'):
+                        track.crop_save_count = 0
+                    if track.crop_save_count % 15 == 0:
+                        self._save_body_crop(frame, det["bbox"], track_id)
+                    track.crop_save_count += 1
 
             # 5. 生成事件
             self._generate_events(frame, tracked)
@@ -242,6 +255,83 @@ class DetectionPipeline:
                 det["person_name"] = match["name"]
                 det["person_id"] = match["person_id"]
                 logger.info(f"识别到: {match['name']} (track_id={track.track_id})")
+
+    def _load_body_classifier(self):
+        """加载自定义体态分类器（YOLOv8-Cls）"""
+        try:
+            model_path = Path("data/camera/models/body_classifier.pt")
+            if model_path.exists():
+                from ultralytics import YOLO
+                self.body_classifier = YOLO(str(model_path))
+                self.body_classes = self.body_classifier.names
+                logger.info(f"成功加载自定义体态分类器模型，包含类别: {self.body_classes}")
+            else:
+                self.body_classifier = None
+                self.body_classes = []
+        except Exception as e:
+            logger.error(f"加载自定义体态分类器模型失败: {e}", exc_info=True)
+
+    def _do_custom_body_classification(self, frame, tracked_detections):
+        """利用自定义体态分类器进行检测兜底"""
+        if not self.body_classifier:
+            return
+
+        for det in tracked_detections:
+            track = self.tracker.get_track(det.get("track_id", 0))
+            if not track or (track.person_name and track.person_name != "未识别"):
+                continue
+
+            x1, y1, x2, y2 = det["bbox"]
+            h, w = frame.shape[:2]
+            x1, y1, x2, y2 = max(0, x1), max(0, y1), min(w, x2), min(h, y2)
+            body_crop = frame[y1:y2, x1:x2]
+
+            if body_crop.size == 0:
+                continue
+
+            try:
+                results = self.body_classifier(body_crop, verbose=False)
+                if results and len(results) > 0:
+                    probs = results[0].probs
+                    top1_idx = probs.top1
+                    top1_conf = float(probs.top1conf)
+                    
+                    if top1_conf >= 0.75:
+                        cls_name = self.body_classes[top1_idx]
+                        display_name = f"{cls_name} (体态)"
+                        track.person_name = display_name
+                        det["person_name"] = display_name
+                        
+                        for p in self._registered_persons_cache:
+                            if p.name == cls_name:
+                                track.person_id = p.id
+                                det["person_id"] = p.id
+                                break
+                        logger.info(f"【体态分类匹配】识别到: {display_name} (置信度={round(top1_conf, 3)}, track_id={track.track_id})")
+            except Exception as e:
+                logger.error(f"自定义体态分类推理失败: {e}")
+
+    def _save_body_crop(self, frame, bbox, track_id):
+        """保存人体裁剪框图片到数据收集器中用于模型训练"""
+        try:
+            collector_dir = Path("data/camera/body_dataset/collector")
+            if not collector_dir.exists():
+                collector_dir.mkdir(parents=True, exist_ok=True)
+
+            x1, y1, x2, y2 = bbox
+            h, w = frame.shape[:2]
+            x1, y1, x2, y2 = max(0, x1), max(0, y1), min(w, x2), min(h, y2)
+            body_crop = frame[y1:y2, x1:x2]
+
+            if body_crop.size == 0:
+                return
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            filename = f"body_{track_id}_{timestamp}.jpg"
+            filepath = collector_dir / filename
+            cv2.imwrite(str(filepath), body_crop, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        except Exception as e:
+            logger.error(f"保存数据收集样本失败: {e}")
 
     def _update_registered_persons_cache(self):
         """定期从数据库重新加载已注册人员的体态特征"""

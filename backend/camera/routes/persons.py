@@ -35,7 +35,9 @@ async def create_person(
     # 保存照片
     ext = os.path.splitext(face_image.filename)[1] or ".jpg"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"face_{timestamp}_{name}{ext}"
+    import uuid
+    unique_suffix = uuid.uuid4().hex[:8]
+    filename = f"face_{timestamp}_{unique_suffix}{ext}"
     filepath = config.FACES_DIR / filename
 
     try:
@@ -115,7 +117,9 @@ async def update_person(
     if face_image:
         ext = os.path.splitext(face_image.filename)[1] or ".jpg"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"face_{timestamp}_{person.name}{ext}"
+        import uuid
+        unique_suffix = uuid.uuid4().hex[:8]
+        filename = f"face_{timestamp}_{unique_suffix}{ext}"
         filepath = config.FACES_DIR / filename
 
         with open(filepath, "wb") as f:

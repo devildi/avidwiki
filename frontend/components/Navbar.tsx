@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Search, Monitor, Settings, Database } from 'lucide-react';
+import { Search, Monitor, Settings, Database, Brain } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function Navbar() {
@@ -19,6 +19,11 @@ export default function Navbar() {
       label: '机房监控',
       href: '/monitoring',
       icon: Monitor,
+    },
+    {
+      label: '模型训练',
+      href: '/training',
+      icon: Brain,
     },
     {
       label: '系统设置',

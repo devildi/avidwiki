@@ -32,6 +32,13 @@ os.environ['TRANSFORMERS_OFFLINE'] = '1'
 # Suppress C++ logging from MediaPipe (glog) to clean up terminal output
 os.environ["GLOG_minloglevel"] = "2"
 
+# Prevent multi-threaded import race condition for PyTorch/Torchvision by importing them eagerly in the main thread
+try:
+    import torch
+    import torchvision
+except ImportError:
+    pass
+
 # Configure logging
 log_dir = os.path.dirname(os.path.abspath(__file__))
 log_file = os.path.join(log_dir, "api.log")

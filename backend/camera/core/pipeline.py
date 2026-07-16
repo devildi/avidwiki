@@ -93,7 +93,7 @@ class DetectionPipeline:
 
         # 初始化组件
         self.detector = PersonDetector()
-        self.tracker = PersonTracker()
+        self.tracker = PersonTracker(max_misses=75)  # 容忍连续 75 帧（约 4-5 秒）丢失，防止短暂遮挡导致 ID 重置
         self.face_recognizer = FaceRecognizer()
         self.pose_analyzer = PoseAnalyzer()
 
@@ -257,17 +257,33 @@ class DetectionPipeline:
                 logger.info(f"识别到: {match['name']} (track_id={track.track_id})")
 
     def _load_body_classifier(self):
-        """加载自定义体态分类器（YOLOv8-Cls）"""
+        """加载自定义体态分类器（YOLOv8-Cls），仅当文件变化时重载"""
         try:
             model_path = Path("data/camera/models/body_classifier.pt")
-            if model_path.exists():
-                from ultralytics import YOLO
-                self.body_classifier = YOLO(str(model_path))
-                self.body_classes = self.body_classifier.names
-                logger.info(f"成功加载自定义体态分类器模型，包含类别: {self.body_classes}")
-            else:
-                self.body_classifier = None
-                self.body_classes = []
+            
+            # 记录上一次加载的模型修改时间与存在状态
+            if not hasattr(self, "_body_classifier_last_mtime"):
+                self._body_classifier_last_mtime = 0
+            if not hasattr(self, "_body_classifier_exists"):
+                self._body_classifier_exists = False
+
+            current_exists = model_path.exists()
+            current_mtime = model_path.stat().st_mtime if current_exists else 0
+
+            # 如果文件存在状态发生改变，或者修改时间改变，才重新加载模型
+            if current_exists != self._body_classifier_exists or current_mtime != self._body_classifier_last_mtime:
+                self._body_classifier_exists = current_exists
+                self._body_classifier_last_mtime = current_mtime
+
+                if current_exists:
+                    from ultralytics import YOLO
+                    self.body_classifier = YOLO(str(model_path))
+                    self.body_classes = self.body_classifier.names
+                    logger.info(f"成功加载自定义体态分类器模型，包含类别: {self.body_classes}")
+                else:
+                    self.body_classifier = None
+                    self.body_classes = []
+                    logger.info("自定义体态分类器模型文件不存在，已卸载模型。")
         except Exception as e:
             logger.error(f"加载自定义体态分类器模型失败: {e}", exc_info=True)
 
@@ -283,8 +299,19 @@ class DetectionPipeline:
 
             x1, y1, x2, y2 = det["bbox"]
             h, w = frame.shape[:2]
-            x1, y1, x2, y2 = max(0, x1), max(0, y1), min(w, x2), min(h, y2)
-            body_crop = frame[y1:y2, x1:x2]
+            
+            # 使用与训练数据一致的 20% 外扩边界框
+            box_width = x2 - x1
+            box_height = y2 - y1
+            pad_w = int(box_width * 0.20)
+            pad_h = int(box_height * 0.20)
+            
+            x1_padded = max(0, x1 - pad_w)
+            y1_padded = max(0, y1 - pad_h)
+            x2_padded = min(w, x2 + pad_w)
+            y2_padded = min(h, y2 + pad_h)
+            
+            body_crop = frame[y1_padded:y2_padded, x1_padded:x2_padded]
 
             if body_crop.size == 0:
                 continue
@@ -296,17 +323,26 @@ class DetectionPipeline:
                     top1_idx = probs.top1
                     top1_conf = float(probs.top1conf)
                     
-                    if top1_conf >= 0.75:
+                    if top1_conf >= 0.60:  # 降低阈值至 0.60，使小样本体态分类器更灵敏易识别
                         cls_name = self.body_classes[top1_idx]
-                        display_name = f"{cls_name} (体态)"
+                        
+                        # 查找关联的注册人员
+                        matched_person = None
+                        for p in self._registered_persons_cache:
+                            p_label = getattr(p, "body_label", "")
+                            if p_label == cls_name or p.name == cls_name:
+                                matched_person = p
+                                break
+                                
+                        if matched_person:
+                            display_name = f"{matched_person.name} (体态)"
+                            track.person_id = matched_person.id
+                            det["person_id"] = matched_person.id
+                        else:
+                            display_name = f"{cls_name} (体态)"
+                            
                         track.person_name = display_name
                         det["person_name"] = display_name
-                        
-                        for p in self._registered_persons_cache:
-                            if p.name == cls_name:
-                                track.person_id = p.id
-                                det["person_id"] = p.id
-                                break
                         logger.info(f"【体态分类匹配】识别到: {display_name} (置信度={round(top1_conf, 3)}, track_id={track.track_id})")
             except Exception as e:
                 logger.error(f"自定义体态分类推理失败: {e}")
@@ -320,8 +356,19 @@ class DetectionPipeline:
 
             x1, y1, x2, y2 = bbox
             h, w = frame.shape[:2]
-            x1, y1, x2, y2 = max(0, x1), max(0, y1), min(w, x2), min(h, y2)
-            body_crop = frame[y1:y2, x1:x2]
+            
+            # 为人体边界框向四周外扩 20% 的宽度和高度，以便保留头部/面部及背景上下文
+            box_width = x2 - x1
+            box_height = y2 - y1
+            pad_w = int(box_width * 0.20)
+            pad_h = int(box_height * 0.20)
+            
+            x1_padded = max(0, x1 - pad_w)
+            y1_padded = max(0, y1 - pad_h)
+            x2_padded = min(w, x2 + pad_w)
+            y2_padded = min(h, y2 + pad_h)
+            
+            body_crop = frame[y1_padded:y2_padded, x1_padded:x2_padded]
 
             if body_crop.size == 0:
                 return
@@ -345,6 +392,7 @@ class DetectionPipeline:
                     type('PersonCache', (object,), {
                         'id': p.id,
                         'name': p.name,
+                        'body_label': getattr(p, "body_label", ""),
                         'body_signature': p.body_signature
                     })() for p in persons
                 ]
@@ -409,6 +457,17 @@ class DetectionPipeline:
 
     def _emit_event(self, frame, det, track, event_type, description):
         """发送事件"""
+        # 事件防抖去重逻辑：同一个事件类型 + 同一个人，在 8 秒内不重复发送，防止 ID 抖动产生重复事件记录
+        now = time.time()
+        event_key = (event_type, track.person_id, track.person_name)
+        if not hasattr(self, "_last_event_timestamps"):
+            self._last_event_timestamps = {}
+        last_time = self._last_event_timestamps.get(event_key, 0)
+        if now - last_time < 8.0:
+            logger.debug(f"【事件防抖拦截】8秒内重复触发 {event_type} 事件（人员: {track.person_name}），已自动过滤。")
+            return
+        self._last_event_timestamps[event_key] = now
+
         snapshot_path = ""
         body_features_str = ""
 

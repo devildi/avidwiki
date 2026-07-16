@@ -28,6 +28,7 @@ async def create_person(
     name: str = Form(...),
     department: str = Form(""),
     role: str = Form(""),
+    body_label: str = Form(""),
     face_image: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -52,6 +53,7 @@ async def create_person(
         name=name,
         department=department,
         role=role,
+        body_label=body_label,
         face_image_path=str(filepath),
     )
     db.add(person)
@@ -98,6 +100,7 @@ async def update_person(
     name: str = Form(None),
     department: str = Form(None),
     role: str = Form(None),
+    body_label: str = Form(None),
     face_image: UploadFile = File(None),
     db: Session = Depends(get_db),
 ):
@@ -112,6 +115,8 @@ async def update_person(
         person.department = department
     if role is not None:
         person.role = role
+    if body_label is not None:
+        person.body_label = body_label
 
     # 更新照片
     if face_image:

@@ -47,15 +47,23 @@ def prepare_dataset():
             logger.warning(f"类别 '{cat_name}' 的样本数过少 ({len(images)} 张)，训练可能不稳定，建议每个类别至少准备 15-20 张图！")
             
         random.shuffle(images)
-        split_idx = int(len(images) * 0.8)
+        if len(images) == 1:
+            train_images = images
+            val_images = images
+        else:
+            split_idx = int(len(images) * 0.8)
+            # 确保训练集和验证集都至少包含 1 张图片，防止 YOLO/torchvision 报空目录错误
+            if split_idx == 0:
+                split_idx = 1
+            elif split_idx == len(images):
+                split_idx = len(images) - 1
+            train_images = images[:split_idx]
+            val_images = images[split_idx:]
         
         cat_train_dir = train_dir / cat_name
         cat_val_dir = val_dir / cat_name
         cat_train_dir.mkdir(parents=True, exist_ok=True)
         cat_val_dir.mkdir(parents=True, exist_ok=True)
-        
-        train_images = images[:split_idx]
-        val_images = images[split_idx:]
         
         for img in train_images:
             shutil.copy(img, cat_train_dir / img.name)
@@ -85,34 +93,51 @@ def train_model():
     logger.info("开始加载预训练模型 yolov8n-cls.pt ...")
     model = YOLO("yolov8n-cls.pt")
     
-    # 检测可用硬件加速 (Apple Silicon M1/M2/M3 使用 mps)
+    # 硬件加速检测：对于 macOS 统一使用 CPU 训练，防止 Apple Silicon 的 MPS autocast 报错以及老款 Intel Mac (AMD GPU) 的 Metal 命令通道崩溃问题。
+    # 对于带有 NVIDIA 显卡的 Windows/Linux 系统，继续支持 CUDA 加速。
     import torch
     device = "cpu"
-    if torch.backends.mps.is_available():
-        device = "mps"
-        logger.info("检测到 Apple Silicon GPU (MPS) 加速可用，将使用 MPS 硬件加速进行训练。")
-    elif torch.cuda.is_available():
+    if torch.cuda.is_available():
         device = "0"
         logger.info("检测到 NVIDIA CUDA 显卡可用，将使用 GPU 进行训练。")
     else:
-        logger.info("未检测到显卡加速，将使用 CPU 进行训练（小分类模型在 CPU 下训练也很快，大约 1-2 分钟）。")
+        logger.info("将使用 CPU 进行训练（小分类模型在 CPU 下训练非常稳定且快速，耗时约 30 秒）。")
         
     logger.info("🚀 开始启动 YOLOv8-Cls 训练...")
-    # epochs=30: 轻量级分类训练 30 个迭代周期即可收敛
-    # imgsz=128: 128x128 像素的体态照片推理效率最高，特征最明显
+    # epochs=80: 增加迭代周期以在小样本数据集上充分收敛，防止训练不足
+    # imgsz=224: 使用 ImageNet 默认分辨率 224x224 像素，保留人脸细节及衣着纹理，显著提升准确率
     model.train(
         data=str(split_dir.resolve()),
-        epochs=30,
-        imgsz=128,
+        epochs=80,
+        imgsz=224,
         device=device,
+        amp=False,  # 禁用混合精度训练以解决 macOS Apple Silicon MPS autocast 报错问题
         project="runs/classify",
         name="person_body_train",
         exist_ok=True
     )
     
-    # 查找并保存训练好的最佳权重
-    best_weights = Path("runs/classify/person_body_train/weights/best.pt")
-    if best_weights.exists():
+    # 查找并保存训练好的最佳权重 (动态适配 YOLOv8 在不同版本下对 project 和 name 的路径拼接规则差异)
+    best_weights = None
+    candidate_paths = [
+        Path("runs/classify/runs/classify/person_body_train/weights/best.pt"),
+        Path("runs/classify/person_body_train/weights/best.pt"),
+        Path("runs/person_body_train/weights/best.pt"),
+    ]
+    for cp in candidate_paths:
+        if cp.exists():
+            best_weights = cp
+            break
+            
+    # 如果候选路径均不存在，进行递归搜索兜底
+    if not best_weights:
+        runs_dir = Path("runs")
+        if runs_dir.exists():
+            found_paths = list(runs_dir.glob("**/person_body_train/weights/best.pt"))
+            if found_paths:
+                best_weights = found_paths[0]
+
+    if best_weights and best_weights.exists():
         dest_model_dir = Path("data/camera/models")
         dest_model_dir.mkdir(parents=True, exist_ok=True)
         dest_model_path = dest_model_dir / "body_classifier.pt"

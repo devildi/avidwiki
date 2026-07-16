@@ -14,6 +14,16 @@ from datetime import datetime
 from dotenv import load_dotenv
 import shutil
 
+# Custom filter to suppress noisy access logs from background polling
+class EndpointFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        if "GET /api/training/unlabeled" in message:
+            return False
+        return True
+
+logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+
 # Add backend modules to path
 sys.path.append(os.path.join(os.getcwd(), 'backend', 'database'))
 sys.path.append(os.path.join(os.getcwd(), 'backend', 'ingest'))
@@ -396,11 +406,18 @@ def list_training_labels():
     from pathlib import Path
     labeled_dir = Path("data/camera/body_dataset/labeled")
     if not labeled_dir.exists():
-        return {"labels": []}
+        return {"labels": [], "counts": {}}
     try:
-        labels = [d.name for d in labeled_dir.iterdir() if d.is_dir()]
+        labels = []
+        counts = {}
+        for d in labeled_dir.iterdir():
+            if d.is_dir():
+                labels.append(d.name)
+                # Count files inside the directory
+                imgs = [f for f in d.iterdir() if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+                counts[d.name] = len(imgs)
         labels.sort()
-        return {"labels": labels}
+        return {"labels": labels, "counts": counts}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -433,6 +450,100 @@ def label_crop_file(req: LabelCropRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to move file: {e}")
 
+@app.delete("/api/training/crop/{filename}")
+def delete_crop_file(filename: str):
+    import os
+    from pathlib import Path
+    collector_dir = Path("data/camera/body_dataset/collector")
+    
+    # 路径防越界漏洞
+    if ".." in filename or filename.startswith("/") or filename.startswith("\\"):
+        raise HTTPException(status_code=400, detail="非法文件名")
+        
+    filepath = collector_dir / filename
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="图片不存在")
+        
+    try:
+        os.remove(filepath)
+        return {"status": "success", "message": f"Successfully deleted {filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除图片失败: {e}")
+
+@app.get("/body-crops/labeled/{label_name}/{filename}")
+def get_labeled_body_crop(label_name: str, filename: str):
+    from fastapi.responses import FileResponse
+    from pathlib import Path
+    
+    # 路径防越权越界
+    if ".." in label_name or ".." in filename or filename.startswith("/") or filename.startswith("\\"):
+        raise HTTPException(status_code=400, detail="Invalid path")
+        
+    filepath = Path("data/camera/body_dataset/labeled") / label_name / filename
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="Crop file not found")
+    return FileResponse(str(filepath))
+
+@app.get("/api/training/labeled/{label_name}")
+def list_labeled_crops(label_name: str):
+    from pathlib import Path
+    
+    # 路径防越界
+    if ".." in label_name:
+        raise HTTPException(status_code=400, detail="Invalid label name")
+        
+    labeled_dir = Path("data/camera/body_dataset/labeled") / label_name
+    if not labeled_dir.exists() or not labeled_dir.is_dir():
+        return {"items": []}
+    try:
+        files = [f.name for f in labeled_dir.iterdir() if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+        files.sort(key=lambda x: (labeled_dir / x).stat().st_mtime, reverse=True)
+        return {"items": files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/training/unlabel/{label_name}/{filename}")
+def unlabel_crop_file(label_name: str, filename: str):
+    import shutil
+    from pathlib import Path
+    
+    # 路径防越界
+    if ".." in label_name or ".." in filename or filename.startswith("/") or filename.startswith("\\"):
+        raise HTTPException(status_code=400, detail="Invalid path")
+        
+    src_file = Path("data/camera/body_dataset/labeled") / label_name / filename
+    if not src_file.exists():
+        raise HTTPException(status_code=404, detail="Source file not found")
+        
+    collector_dir = Path("data/camera/body_dataset/collector")
+    collector_dir.mkdir(parents=True, exist_ok=True)
+    dest_file = collector_dir / filename
+    
+    try:
+        shutil.move(str(src_file), str(dest_file))
+        return {"status": "success", "message": f"Moved {filename} back to collector"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to move file: {e}")
+
+@app.delete("/api/training/labeled/{label_name}/{filename}")
+def delete_labeled_crop_file(label_name: str, filename: str):
+    import os
+    from pathlib import Path
+    
+    # 路径防越界
+    if ".." in label_name or ".." in filename or filename.startswith("/") or filename.startswith("\\"):
+        raise HTTPException(status_code=400, detail="Invalid path")
+        
+    filepath = Path("data/camera/body_dataset/labeled") / label_name / filename
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+        
+    try:
+        os.remove(filepath)
+        return {"status": "success", "message": f"Successfully deleted {filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {e}")
+
 @app.post("/api/training/train")
 def start_model_training():
     global is_training_active
@@ -441,16 +552,29 @@ def start_model_training():
         
     from pathlib import Path
     labeled_dir = Path("data/camera/body_dataset/labeled")
-    has_data = False
-    if labeled_dir.exists():
-        for d in labeled_dir.iterdir():
-            if d.is_dir():
-                imgs = [f for f in d.iterdir() if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
-                if len(imgs) > 0:
-                    has_data = True
-                    break
-    if not has_data:
-        raise HTTPException(status_code=400, detail="请至少完成一个类别并且包含照片的打标再进行训练！")
+    
+    # 1. 检查标注目录是否存在
+    if not labeled_dir.exists():
+        raise HTTPException(status_code=400, detail="未找到已标注的体态数据，请先新建类别并完成打标！")
+        
+    categories = [d for d in labeled_dir.iterdir() if d.is_dir()]
+    
+    # 2. 检查类别数量（分类模型最少需要 2 个类别）
+    if len(categories) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=f"模型训练最少需要 2 个不同的类别（当前仅有 {len(categories)} 个）。请新建并标注至少两个类别（例如：wudi 和 qita）后再启动训练！"
+        )
+        
+    # 3. 检查每个类别的样本数（硬性要求最少 5 张）
+    MIN_IMAGES = 5
+    for cat in categories:
+        imgs = [f for f in cat.iterdir() if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+        if len(imgs) < MIN_IMAGES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"类别「{cat.name}」的标注图片过少（当前仅有 {len(imgs)} 张，最少需要 {MIN_IMAGES} 张图片）。请继续为该类别补充标注，或者删除该空/少图类别文件夹后再进行训练！"
+            )
         
     is_training_active = True
     

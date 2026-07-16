@@ -1,40 +1,53 @@
 "use client";
-
+ 
 import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../../components/Navbar';
-import { ArrowLeft, Play, RefreshCw, Tag, Plus, Info, Terminal, Image, Check } from 'lucide-react';
+import { ArrowLeft, Play, RefreshCw, Tag, Plus, Info, Terminal, Image, Check, ZoomIn, Trash2, Images, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
-
+ 
 export default function TrainingPage() {
   const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
-
+ 
   // State Management
   const [unlabeledCrops, setUnlabeledCrops] = useState<string[]>([]);
   const [labels, setLabels] = useState<string[]>([]);
+  const [labelCounts, setLabelCounts] = useState<Record<string, number>>({});
   const [selectedLabel, setSelectedLabel] = useState<string>('');
   const [newLabelInput, setNewLabelInput] = useState<string>('');
   const [isTraining, setIsTraining] = useState<boolean>(false);
   const [trainingLogs, setTrainingLogs] = useState<string>('');
   const [loadingCrops, setLoadingCrops] = useState<boolean>(true);
   const [fadeImages, setFadeImages] = useState<Record<string, boolean>>({});
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewLabel, setPreviewLabel] = useState<string | null>(null);
+  const [labeledCrops, setLabeledCrops] = useState<string[]>([]);
+  const [loadingLabeled, setLoadingLabeled] = useState<boolean>(false);
 
   // Console log scrolling ref
   const terminalRef = useRef<HTMLDivElement>(null);
   const logIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Keep a ref of fadeImages to prevent stale closures inside polling interval
+  const fadeImagesRef = useRef(fadeImages);
+  useEffect(() => {
+    fadeImagesRef.current = fadeImages;
+  }, [fadeImages]);
+
   // Fetch unlabeled crops
-  const fetchCrops = async () => {
+  const fetchCrops = async (silent = false) => {
     try {
-      setLoadingCrops(true);
+      if (!silent) setLoadingCrops(true);
       const res = await fetch(`${API_BASE}/api/training/unlabeled`);
       if (res.ok) {
         const data = await res.json();
-        setUnlabeledCrops(data.items || []);
+        const items = data.items || [];
+        // 过滤掉当前正在淡出/已经分类的图片
+        setUnlabeledCrops(items.filter((filename: string) => !fadeImagesRef.current[filename]));
       }
     } catch (e) {
       console.error("Failed to load crops:", e);
     } finally {
-      setLoadingCrops(false);
+      if (!silent) setLoadingCrops(false);
     }
   };
 
@@ -45,6 +58,7 @@ export default function TrainingPage() {
       if (res.ok) {
         const data = await res.json();
         setLabels(data.labels || []);
+        setLabelCounts(data.counts || {});
         // Set default selected label if none is active
         if (data.labels && data.labels.length > 0 && !selectedLabel) {
           setSelectedLabel(data.labels[0]);
@@ -57,11 +71,17 @@ export default function TrainingPage() {
 
   // Load initial data
   useEffect(() => {
-    fetchCrops();
+    fetchCrops(false);
     fetchLabels();
     checkTrainingStatus();
 
+    // 每 4 秒静默轮询一次，自动呈现摄像头抓拍到的新图片
+    const pollInterval = setInterval(() => {
+      fetchCrops(true);
+    }, 4000);
+
     return () => {
+      clearInterval(pollInterval);
       if (logIntervalRef.current) {
         clearInterval(logIntervalRef.current);
       }
@@ -144,6 +164,12 @@ export default function TrainingPage() {
       setUnlabeledCrops(prev => prev.filter(f => f !== filename));
     }, 200);
 
+    // Optimistically update label counts in UI instantly!
+    setLabelCounts(prev => ({
+      ...prev,
+      [selectedLabel]: (prev[selectedLabel] || 0) + 1
+    }));
+
     try {
       const res = await fetch(`${API_BASE}/api/training/label`, {
         method: 'POST',
@@ -154,6 +180,11 @@ export default function TrainingPage() {
         const data = await res.json();
         // Rollback state if server-side move failed
         setFadeImages(prev => ({ ...prev, [filename]: false }));
+        // Rollback count
+        setLabelCounts(prev => ({
+          ...prev,
+          [selectedLabel]: Math.max(0, (prev[selectedLabel] || 1) - 1)
+        }));
         fetchCrops();
         alert(`标注失败: ${data.detail || '移动文件失败'}`);
       } else {
@@ -163,7 +194,122 @@ export default function TrainingPage() {
     } catch (e) {
       console.error("Failed to label crop:", e);
       setFadeImages(prev => ({ ...prev, [filename]: false }));
+      // Rollback count
+      setLabelCounts(prev => ({
+        ...prev,
+        [selectedLabel]: Math.max(0, (prev[selectedLabel] || 1) - 1)
+      }));
       fetchCrops();
+    }
+  };
+
+  // Delete a crop file
+  const handleDeleteCrop = async (filename: string) => {
+    // Set fade-out class instantly for smooth UI transition
+    setFadeImages(prev => ({ ...prev, [filename]: true }));
+
+    // Wait briefly for the fade-out animation to finish, then delete from state
+    setTimeout(() => {
+      setUnlabeledCrops(prev => prev.filter(f => f !== filename));
+    }, 200);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/training/crop/${filename}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        // Rollback state if server-side delete failed
+        setFadeImages(prev => ({ ...prev, [filename]: false }));
+        fetchCrops();
+        alert(`删除失败: ${data.detail || '无法删除图片'}`);
+      }
+    } catch (e) {
+      console.error("Failed to delete crop:", e);
+      setFadeImages(prev => ({ ...prev, [filename]: false }));
+      fetchCrops();
+    }
+  };
+
+  // Fetch labeled crops for a category
+  const fetchLabeledCrops = async (label: string) => {
+    try {
+      setLoadingLabeled(true);
+      const res = await fetch(`${API_BASE}/api/training/labeled/${label}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLabeledCrops(data.items || []);
+      }
+    } catch (e) {
+      console.error("Failed to load labeled crops:", e);
+    } finally {
+      setLoadingLabeled(false);
+    }
+  };
+
+  // Trigger fetch when previewLabel changes
+  useEffect(() => {
+    if (previewLabel) {
+      fetchLabeledCrops(previewLabel);
+    }
+  }, [previewLabel]);
+
+  // Move a labeled image back to unlabeled (Move back to collector)
+  const handleUnlabelCrop = async (label: string, filename: string) => {
+    // Optimistically update counts and UI
+    setLabeledCrops(prev => prev.filter(f => f !== filename));
+    setLabelCounts(prev => ({
+      ...prev,
+      [label]: Math.max(0, (prev[label] || 1) - 1)
+    }));
+
+    try {
+      const res = await fetch(`${API_BASE}/api/training/unlabel/${label}/${filename}`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        alert("移回待标注失败！");
+        fetchLabeledCrops(label);
+        fetchLabels();
+        fetchCrops();
+      } else {
+        fetchCrops(); // Refresh unlabeled crops list
+        fetchLabels(); // Re-sync counts from server
+      }
+    } catch (e) {
+      console.error("Failed to unlabel crop:", e);
+      fetchLabeledCrops(label);
+      fetchLabels();
+      fetchCrops();
+    }
+  };
+
+  // Delete a labeled crop image
+  const handleDeleteLabeledCrop = async (label: string, filename: string) => {
+    if (!confirm("确定要永久删除这张已标记的图片吗？")) return;
+
+    // Optimistically update counts and UI
+    setLabeledCrops(prev => prev.filter(f => f !== filename));
+    setLabelCounts(prev => ({
+      ...prev,
+      [label]: Math.max(0, (prev[label] || 1) - 1)
+    }));
+
+    try {
+      const res = await fetch(`${API_BASE}/api/training/labeled/${label}/${filename}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        alert("删除已标注图片失败！");
+        fetchLabeledCrops(label);
+        fetchLabels();
+      } else {
+        fetchLabels(); // Re-sync counts from server
+      }
+    } catch (e) {
+      console.error("Failed to delete labeled crop:", e);
+      fetchLabeledCrops(label);
+      fetchLabels();
     }
   };
 
@@ -194,16 +340,9 @@ export default function TrainingPage() {
       <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-4 gap-8">
         
         {/* Left Column: Tools, Labels & Controls */}
-        <div className="lg:col-span-1 space-y-6 flex flex-col h-full">
+        <div className="lg:col-span-1 space-y-6 flex flex-col h-fit">
           
-          {/* Back link */}
-          <Link 
-            href="/monitoring" 
-            className="inline-flex items-center gap-2 text-xs text-neutral-400 hover:text-neutral-200 transition-colors bg-neutral-800/40 border border-neutral-800 rounded-xl px-3.5 py-2 w-fit"
-          >
-            <ArrowLeft size={12} />
-            返回行为监测
-          </Link>
+
 
           {/* Active Label Panel */}
           <div className="bg-neutral-800/40 border border-neutral-800 rounded-3xl p-5 shadow-xl backdrop-blur-sm space-y-4">
@@ -217,24 +356,48 @@ export default function TrainingPage() {
               {labels.length === 0 ? (
                 <div className="text-xs text-neutral-600 italic py-2">暂无可用类别，请在下方新建。</div>
               ) : (
-                labels.map(lbl => (
-                  <button
-                    key={lbl}
-                    type="button"
-                    onClick={() => setSelectedLabel(lbl)}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${
-                      selectedLabel === lbl
-                        ? "bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-600/10"
-                        : "bg-neutral-900/60 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Tag size={12} />
-                      <span>{lbl}</span>
+                labels.map(lbl => {
+                  const count = labelCounts[lbl] || 0;
+                  return (
+                    <div
+                      key={lbl}
+                      className="w-full flex items-center justify-between gap-1.5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLabel(lbl)}
+                        className={`flex-1 flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all border min-w-0 ${
+                          selectedLabel === lbl
+                            ? "bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-600/10"
+                            : "bg-neutral-900/60 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 text-left min-w-0 flex-1">
+                          <Tag size={12} className="shrink-0" />
+                          <span className="truncate">
+                            {lbl}
+                            {selectedLabel === lbl && (
+                              <span className="ml-1 text-[10px] text-purple-200 font-normal whitespace-nowrap">
+                                （{count}张已标记，待训练）
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        {selectedLabel === lbl && <Check size={12} className="shrink-0 ml-1" />}
+                      </button>
+
+                      {/* Preview Button */}
+                      <button
+                        type="button"
+                        onClick={() => setPreviewLabel(lbl)}
+                        className="p-2 bg-neutral-900/60 hover:bg-purple-900/40 border border-neutral-800 hover:border-purple-500/50 text-neutral-400 hover:text-purple-300 rounded-xl transition-all cursor-pointer flex items-center justify-center shrink-0"
+                        title={`查看「${lbl}」已标注的图片`}
+                      >
+                        <Images size={12} />
+                      </button>
                     </div>
-                    {selectedLabel === lbl && <Check size={12} />}
-                  </button>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -299,7 +462,7 @@ export default function TrainingPage() {
         </div>
 
         {/* Right Column: Grid and Console Logger */}
-        <div className="lg:col-span-3 space-y-6 flex flex-col h-[calc(100vh-140px)]">
+        <div className="lg:col-span-3 space-y-6 flex flex-col h-[calc(200vh-280px)]">
           
           {/* Main workspace */}
           <div className="bg-neutral-800/40 border border-neutral-800 rounded-3xl p-6 shadow-xl backdrop-blur-sm flex-1 flex flex-col min-h-0">
@@ -327,12 +490,26 @@ export default function TrainingPage() {
               ) : (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
                   {unlabeledCrops.map(filename => (
-                    <button
+                    <div
                       key={filename}
-                      type="button"
-                      disabled={!selectedLabel}
-                      onClick={() => handleLabelCrop(filename)}
-                      className={`relative aspect-[3/4] bg-neutral-950 border border-neutral-800/80 rounded-xl overflow-hidden group hover:border-purple-500/50 transition-all select-none duration-200 active:scale-95 cursor-pointer disabled:cursor-not-allowed ${
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        if (selectedLabel) {
+                          handleLabelCrop(filename);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          if (selectedLabel) {
+                            handleLabelCrop(filename);
+                          }
+                        }
+                      }}
+                      className={`relative aspect-[3/4] bg-neutral-950 border border-neutral-800/80 rounded-xl overflow-hidden group hover:border-purple-500/50 transition-all select-none duration-200 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-purple-500 ${
+                        selectedLabel ? "cursor-pointer" : "cursor-default"
+                      } ${
                         fadeImages[filename] ? "scale-0 opacity-0" : "scale-100 opacity-100"
                       }`}
                     >
@@ -340,7 +517,7 @@ export default function TrainingPage() {
                       <img
                         src={`${API_BASE}/body-crops/${filename}`}
                         alt="Crop"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform"
                         loading="lazy"
                       />
 
@@ -356,7 +533,33 @@ export default function TrainingPage() {
                           <span className="text-[8px] text-neutral-400">请选择标签</span>
                         </div>
                       )}
-                    </button>
+
+                      {/* Delete Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCrop(filename);
+                        }}
+                        className="absolute top-1.5 left-1.5 p-1.5 bg-black/60 hover:bg-red-600 hover:text-white text-neutral-300 rounded-lg opacity-0 group-hover:opacity-100 transition-all z-20 hover:scale-110 cursor-pointer"
+                        title="直接删除图片"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+
+                      {/* Zoom Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreviewImage(`${API_BASE}/body-crops/${filename}`);
+                        }}
+                        className="absolute top-1.5 right-1.5 p-1.5 bg-black/60 hover:bg-purple-600 hover:text-white text-neutral-300 rounded-lg opacity-0 group-hover:opacity-100 transition-all z-20 hover:scale-110 cursor-pointer"
+                        title="查看大图"
+                      >
+                        <ZoomIn size={12} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -382,6 +585,150 @@ export default function TrainingPage() {
         </div>
 
       </main>
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div 
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div 
+            className="relative bg-neutral-900 border border-neutral-800 rounded-3xl p-5 max-w-xl w-full max-h-[85vh] flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-4 right-4 p-2 bg-neutral-800/80 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 rounded-xl transition-all z-10 cursor-pointer"
+            >
+              <Plus size={18} className="rotate-45" />
+            </button>
+
+            {/* Modal Content */}
+            <div className="flex-1 flex flex-col items-center justify-center p-2 min-h-0">
+              <div className="relative w-full flex-1 min-h-[300px] flex items-center justify-center bg-black/40 rounded-2xl overflow-hidden mb-4 border border-neutral-800/50">
+                <img
+                  src={previewImage}
+                  alt="Full Crop Preview"
+                  className="max-w-full max-h-[55vh] object-contain rounded-lg"
+                />
+              </div>
+              
+              <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-2 shrink-0">
+                <div className="min-w-0">
+                  <h4 className="text-xs font-bold text-neutral-200 truncate max-w-xs sm:max-w-md">
+                    {previewImage.split('/').pop()}
+                  </h4>
+                  <p className="text-[10px] text-neutral-500 mt-0.5">
+                    展示完整的无损裁剪大图，未做任何边角修剪
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const filename = previewImage.split('/').pop();
+                    if (filename) {
+                      handleLabelCrop(filename);
+                      setPreviewImage(null);
+                    }
+                  }}
+                  disabled={!selectedLabel}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-lg shadow-purple-600/10 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <Tag size={12} />
+                  <span>标注为 {selectedLabel || '...'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Labeled Images Preview Modal */}
+      {previewLabel && (
+        <div 
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setPreviewLabel(null)}
+        >
+          <div 
+            className="relative bg-neutral-900 border border-neutral-800 rounded-3xl p-6 max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setPreviewLabel(null)}
+              className="absolute top-4 right-4 p-2 bg-neutral-800/80 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 rounded-xl transition-all z-10 cursor-pointer"
+            >
+              <Plus size={18} className="rotate-45" />
+            </button>
+
+            {/* Modal Header */}
+            <div className="mb-4 shrink-0 pr-8">
+              <h3 className="font-bold text-base text-neutral-100 flex items-center gap-2">
+                <Images size={16} className="text-purple-400" />
+                类别「{previewLabel}」的所有标注图片
+              </h3>
+              <p className="text-[10px] text-neutral-500 mt-1">
+                展示该分类下的所有物理样本图片（当前共 {labeledCrops.length} 张）。您可以撤销分类将其移回待标注池，或彻底物理删除。
+              </p>
+            </div>
+
+            {/* Modal Content - Scrollable Grid */}
+            <div className="flex-1 overflow-y-auto min-h-0 pr-1 scrollbar-thin border-t border-neutral-800/60 pt-4">
+              {loadingLabeled ? (
+                <div className="h-48 flex items-center justify-center">
+                  <div className="h-6 w-6 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+                </div>
+              ) : labeledCrops.length === 0 ? (
+                <div className="h-48 flex flex-col items-center justify-center text-center text-neutral-500 italic text-xs">
+                  <p>📂 暂无已标注的图片。</p>
+                  <p className="text-[10px] text-neutral-600 mt-1">您可以将待标注库中的样本分类至此。</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                  {labeledCrops.map(filename => (
+                    <div
+                      key={filename}
+                      className="relative aspect-[3/4] bg-neutral-950 border border-neutral-800/80 rounded-xl overflow-hidden group hover:border-purple-500/50 transition-all select-none duration-200"
+                    >
+                      {/* Image */}
+                      <img
+                        src={`${API_BASE}/body-crops/labeled/${previewLabel}/${filename}`}
+                        alt="Labeled crop"
+                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform"
+                        loading="lazy"
+                      />
+
+                      {/* Hover Overlay Menu */}
+                      <div className="absolute inset-0 bg-neutral-950/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2 p-2 transition-all">
+                        <button
+                          type="button"
+                          onClick={() => handleUnlabelCrop(previewLabel, filename)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[9px] font-bold transition-all w-full justify-center cursor-pointer shadow-md"
+                          title="移回待标注池，可以重新标注/分类"
+                        >
+                          <RotateCcw size={10} />
+                          <span>移回待标注</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLabeledCrop(previewLabel, filename)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[9px] font-bold transition-all w-full justify-center cursor-pointer shadow-md"
+                          title="从物理磁盘永久删除此图片"
+                        >
+                          <Trash2 size={10} />
+                          <span>删除图片</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

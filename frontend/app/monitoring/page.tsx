@@ -43,12 +43,14 @@ interface Person {
   department: string;
   role: string;
   face_image_path: string;
+  body_label?: string;
 }
 
 export default function MonitoringPage() {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [events, setEvents] = useState<EventLog[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
+  const [availableLabels, setAvailableLabels] = useState<string[]>([]);
   
   // Active states
   const [selectedCameraId, setSelectedCameraId] = useState<number | null>(null);
@@ -62,7 +64,7 @@ export default function MonitoringPage() {
   const [detectedDevices, setDetectedDevices] = useState<{ id: string; name: string }[]>([]);
   const [isDetecting, setIsDetecting] = useState(false);
   const [cameraActionLoadingId, setCameraActionLoadingId] = useState<number | null>(null);
-  const [newPerson, setNewPerson] = useState({ name: '', department: '', role: '运维' });
+  const [newPerson, setNewPerson] = useState({ name: '', department: '', role: '运维', body_label: '' });
   const [faceFile, setFaceFile] = useState<File | null>(null);
   
   // Real-time Event Feed
@@ -171,6 +173,17 @@ export default function MonitoringPage() {
       if (personRes.ok) {
         const personData = await personRes.json();
         setPersons(personData.items || []);
+      }
+
+      // Fetch Available Classification Labels
+      try {
+        const labelsRes = await fetch(`${API_BASE}/api/training/labels`);
+        if (labelsRes.ok) {
+          const labelsData = await labelsRes.json();
+          setAvailableLabels(labelsData.labels || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch classification labels:", err);
       }
 
       // 5. Fetch Snapshot Path
@@ -415,6 +428,7 @@ export default function MonitoringPage() {
       formData.append("name", newPerson.name);
       formData.append("department", newPerson.department);
       formData.append("role", newPerson.role);
+      formData.append("body_label", newPerson.body_label);
       formData.append("face_image", faceFile);
 
       const res = await fetch(`${API_BASE}/api/persons`, {
@@ -424,7 +438,7 @@ export default function MonitoringPage() {
 
       if (res.ok) {
         setIsRegisteringPerson(false);
-        setNewPerson({ name: '', department: '', role: '运维' });
+        setNewPerson({ name: '', department: '', role: '运维', body_label: '' });
         setFaceFile(null);
         fetchData();
       } else {
@@ -474,6 +488,8 @@ export default function MonitoringPage() {
     const filename = rawPath.split('/').pop();
     return `${API_BASE}/snapshots/${filename}`;
   };
+
+
 
   return (
     <div className="min-h-screen bg-neutral-900 text-neutral-100 flex flex-col overflow-x-hidden">
@@ -823,10 +839,22 @@ export default function MonitoringPage() {
                             href={getSnapshotUrl(evt.snapshot_path)} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors font-semibold"
+                            className="relative group inline-flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors font-semibold"
                           >
                             <CameraIcon size={12} />
                             查看截图
+                            
+                            {/* Hover Snapshot Preview */}
+                            <div className="absolute right-full top-1/2 -translate-y-1/2 mr-3 hidden group-hover:block z-50 p-1.5 bg-neutral-950/95 border border-neutral-800 rounded-xl shadow-2xl backdrop-blur-md w-44 pointer-events-none transition-all duration-200">
+                              <img 
+                                src={getSnapshotUrl(evt.snapshot_path)} 
+                                alt="Snapshot preview" 
+                                className="w-full h-auto rounded-lg object-contain border border-neutral-900/50"
+                              />
+                              <div className="text-[9px] text-neutral-400 text-center mt-1.5 font-mono truncate">
+                                {evt.snapshot_path.split('/').pop() || evt.snapshot_path.split('\\').pop()}
+                              </div>
+                            </div>
                           </a>
                         ) : (
                           <span className="text-neutral-600">-</span>
@@ -1154,6 +1182,21 @@ export default function MonitoringPage() {
                 </div>
               </div>
 
+              {/* Body label dropdown field */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-neutral-500 font-semibold">关联已有的体态分类标签 (可选)</label>
+                <select
+                  value={newPerson.body_label}
+                  onChange={e => setNewPerson(prev => ({ ...prev, body_label: e.target.value }))}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-none cursor-pointer w-full"
+                >
+                  <option value="">-- 不关联 (默认使用姓名进行匹配) --</option>
+                  {availableLabels.map(lbl => (
+                    <option key={lbl} value={lbl}>{lbl}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex gap-2 pt-1.5">
                 <button
                   type="submit"
@@ -1186,22 +1229,63 @@ export default function MonitoringPage() {
               ) : (
                 persons.map(p => (
                   <div key={p.id} className="flex items-center justify-between p-3 bg-neutral-900/40 border border-neutral-800/80 rounded-2xl hover:border-neutral-700 transition-all">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-500/20 to-pink-500/20 flex items-center justify-center text-purple-300 border border-purple-500/10 text-xs font-bold font-sans">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-500/20 to-pink-500/20 flex items-center justify-center text-purple-300 border border-purple-500/10 text-xs font-bold font-sans shrink-0">
                         {p.name.slice(0, 2)}
                       </div>
-                      <div>
-                        <div className="font-semibold text-xs text-neutral-200">{p.name}</div>
-                        <div className="text-[10px] text-neutral-500">{p.department} • {p.role}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-xs text-neutral-200 truncate">{p.name}</div>
+                        <div className="text-[10px] text-neutral-500 truncate flex items-center gap-1 flex-wrap">
+                          <span>{p.department} • {p.role}</span>
+                          {p.body_label && (
+                            <span className="px-1.5 py-0.5 bg-purple-950/60 border border-purple-800/80 text-purple-300 rounded text-[8px] font-bold">
+                              体态: {p.body_label}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleUnregisterPerson(p.id)}
-                      className="p-1 text-neutral-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                      title="注销人员"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Body label inline selector */}
+                      <select
+                        value={p.body_label || ''}
+                        onChange={async (e) => {
+                          const val = e.target.value;
+                          try {
+                            const formData = new FormData();
+                            formData.append("body_label", val);
+                            const res = await fetch(`${API_BASE}/api/persons/${p.id}`, {
+                              method: 'PUT',
+                              body: formData
+                            });
+                            if (res.ok) {
+                              fetchData();
+                            } else {
+                              alert("更新体态标签失败");
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            alert("更新请求出错");
+                          }
+                        }}
+                        className="bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1 text-[10px] text-neutral-400 hover:text-neutral-200 focus:outline-none cursor-pointer max-w-[100px]"
+                        title="设置或更换该人员关联的体态标签"
+                      >
+                        <option value="">未关联体态</option>
+                        {availableLabels.map(lbl => (
+                          <option key={lbl} value={lbl}>{lbl}</option>
+                        ))}
+                      </select>
+
+                      <button
+                        onClick={() => handleUnregisterPerson(p.id)}
+                        className="p-1.5 text-neutral-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                        title="注销人员"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}

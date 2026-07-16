@@ -24,6 +24,7 @@ class Person(Base):
     face_image_path = Column(String(500), default="")  # 注册照片路径
     face_encoding = Column(Text, default="")  # 人脸特征向量 (JSON 序列化)
     body_signature = Column(Text, default="")  # 平均体态签名向量 (JSON 序列化)
+    body_label = Column(String(100), default="")  # 关联已有的体态分类标签
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -37,6 +38,7 @@ class Person(Base):
             "name": self.name,
             "department": self.department,
             "role": self.role,
+            "body_label": self.body_label or "",
             "face_image_path": self.face_image_path,
             "body_signature_registered": bool(self.body_signature),
             "is_active": self.is_active,

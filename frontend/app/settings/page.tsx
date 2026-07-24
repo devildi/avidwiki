@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { ArrowLeft, RefreshCw, Terminal, XCircle, ChevronDown, ChevronUp, Database, Cloud, HardDrive, Trash2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Terminal, XCircle, ChevronDown, ChevronUp, Database, Cloud, HardDrive, Trash2, Clock } from 'lucide-react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 import clsx from 'clsx';
@@ -84,8 +84,67 @@ export default function SettingsPage() {
         }
     };
 
+    const eventSourcesRef = React.useRef<Record<string, EventSource>>({});
+
+    // Crawler timer logic
+    const isCrawling = Object.values(activeTasks).some(v => v) || syncQueue.length > 0;
+    const [crawlStartTime, setCrawlStartTime] = React.useState<number | null>(null);
+    const [elapsedSeconds, setElapsedSeconds] = React.useState<number>(0);
+
+    React.useEffect(() => {
+        let interval: NodeJS.Timeout | null = null;
+        if (isCrawling) {
+            setCrawlStartTime(prev => {
+                const now = Date.now();
+                const start = prev || now;
+                setElapsedSeconds(Math.floor((now - start) / 1000));
+                return start;
+            });
+            interval = setInterval(() => {
+                setCrawlStartTime(prevStart => {
+                    if (prevStart) {
+                        setElapsedSeconds(Math.floor((Date.now() - prevStart) / 1000));
+                    }
+                    return prevStart;
+                });
+            }, 1000);
+        } else {
+            setCrawlStartTime(null);
+            setElapsedSeconds(0);
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isCrawling]);
+
+    const formatTime = (totalSeconds: number) => {
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        const pad = (n: number) => String(n).padStart(2, '0');
+        if (hours > 0) {
+            return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        }
+        return `${pad(minutes)}:${pad(seconds)}`;
+    };
+
+    // Clean up EventSource connections on unmount
+    React.useEffect(() => {
+        return () => {
+            Object.values(eventSourcesRef.current).forEach(es => es?.close());
+            eventSourcesRef.current = {};
+        };
+    }, []);
+
     const handleUpdateNow = React.useCallback(async (id: string) => {
         if (activeTasks[id]) return;
+
+        // Close any existing connection for this ID
+        if (eventSourcesRef.current[id]) {
+            eventSourcesRef.current[id].close();
+            delete eventSourcesRef.current[id];
+        }
 
         // Reset logs and progress for this ID
         setTaskLogs(prev => ({ ...prev, [id]: ["🚀 Initializing SSE connection..."] }));
@@ -99,14 +158,21 @@ export default function SettingsPage() {
 
             // Start SSE subscription
             const es = new EventSource(`${API_BASE}/crawler/logs/${id}`);
+            eventSourcesRef.current[id] = es;
+
+            const MAX_LOGS = 200; // Limit max log items kept in state to prevent RAM overflow
 
             es.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'log') {
-                    setTaskLogs(prev => ({
-                        ...prev,
-                        [id]: [...(prev[id] || []), data.message]
-                    }));
+                    setTaskLogs(prev => {
+                        const logs = prev[id] || [];
+                        const nextLogs = [...logs, data.message];
+                        return {
+                            ...prev,
+                            [id]: nextLogs.length > MAX_LOGS ? nextLogs.slice(nextLogs.length - MAX_LOGS) : nextLogs
+                        };
+                    });
                 } else if (data.type === 'progress') {
                     setTaskProgress(prev => ({
                         ...prev,
@@ -115,6 +181,7 @@ export default function SettingsPage() {
                 } else if (data.type === 'status') {
                     if (data.message === 'finished' || data.message === 'error') {
                         es.close();
+                        delete eventSourcesRef.current[id];
                         setActiveTasks(prev => ({ ...prev, [id]: false }));
                         fetchSources(); // Refresh timestamps
                     }
@@ -122,8 +189,16 @@ export default function SettingsPage() {
             };
 
             es.onerror = () => {
-                setTaskLogs(prev => ({ ...prev, [id]: [...(prev[id] || []), "❌ SSE connection lost."] }));
+                setTaskLogs(prev => {
+                    const logs = prev[id] || [];
+                    const nextLogs = [...logs, "❌ SSE connection lost."];
+                    return {
+                        ...prev,
+                        [id]: nextLogs.length > MAX_LOGS ? nextLogs.slice(nextLogs.length - MAX_LOGS) : nextLogs
+                    };
+                });
                 es.close();
+                delete eventSourcesRef.current[id];
                 setActiveTasks(prev => ({ ...prev, [id]: false }));
             };
 
@@ -135,6 +210,18 @@ export default function SettingsPage() {
     }, [activeTasks, fetchSources]);
 
     const handleCancel = React.useCallback(async (id: string) => {
+        // Immediately reset active UI state for instant user feedback
+        setActiveTasks(prev => ({ ...prev, [id]: false }));
+        setTaskLogs(prev => {
+            const current = prev[id] || [];
+            return { ...prev, [id]: [...current, "🛑 Task cancelled by user."] };
+        });
+
+        if (eventSourcesRef.current[id]) {
+            eventSourcesRef.current[id].close();
+            delete eventSourcesRef.current[id];
+        }
+
         try {
             const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             await fetch(`${API_BASE}/crawler/stop/${id}`, { method: 'POST' });
@@ -274,28 +361,43 @@ export default function SettingsPage() {
                     </div>
                 )}
 
-                {/* Tabs */}
-                <div className="flex gap-2 mb-6">
-                    <button
-                        onClick={() => setActiveTab('sources')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === 'sources'
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
-                            }`}
-                    >
-                        <Database size={18} />
-                        Forum Sources
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('documents')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === 'documents'
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
-                            }`}
-                    >
-                        <Terminal size={18} />
-                        PDF Documents
-                    </button>
+                {/* Tabs & Timer */}
+                <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setActiveTab('sources')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === 'sources'
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                                }`}
+                        >
+                            <Database size={18} />
+                            Forum Sources
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('documents')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === 'documents'
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                                }`}
+                        >
+                            <Terminal size={18} />
+                            PDF Documents
+                        </button>
+                    </div>
+
+                    {/* Timer displayed on the right when crawler is running */}
+                    {isCrawling && (
+                        <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-lg bg-neutral-800/90 border border-purple-500/40 text-purple-300 text-xs font-mono shadow-md backdrop-blur-sm">
+                            <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+                            </span>
+                            <Clock size={14} className="text-purple-400 animate-spin" style={{ animationDuration: '6s' }} />
+                            <span className="text-neutral-400">运行用时:</span>
+                            <span className="font-semibold text-purple-300 text-sm">{formatTime(elapsedSeconds)}</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Tab Content */}

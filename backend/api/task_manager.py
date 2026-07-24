@@ -25,6 +25,9 @@ class TaskManager:
                 self.tasks[source_id]["stop_event"].set()
                 self.tasks[source_id]["status"] = "cancelling"
                 self._add_log_unlocked(source_id, "🛑 Cancellation signal sent...")
+                for q in self.tasks[source_id]["consumers"]:
+                    q.put({"type": "status", "message": "finished"})
+                    q.put(None)
 
     def get_log_queue(self, source_id: int) -> Optional[Queue]:
         with self.lock:

@@ -826,8 +826,8 @@ def run_crawler_task(source_id: str):
                 log_cb(f"❌ Crawler Error: {crawl_err}")
                 task_manager.finish_task(source_id, status="error")
 
-            # Allow some time for SSE to drain before cleanup
-            time.sleep(10)
+            # Allow brief time for SSE to drain before cleanup
+            time.sleep(1)
             task_manager.cleanup_task(source_id)
 
     except Exception as e:

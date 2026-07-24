@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { ArrowLeft, RefreshCw, Terminal, XCircle, ChevronDown, ChevronUp, Database, Cloud, HardDrive } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Terminal, XCircle, ChevronDown, ChevronUp, Database, Cloud, HardDrive, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 import clsx from 'clsx';
@@ -145,6 +145,29 @@ export default function SettingsPage() {
 
     const toggleConsole = React.useCallback((id: string) => {
         setExpandedConsoles(prev => ({ ...prev, [id]: !prev[id] }));
+    }, []);
+
+    const handleDeleteSource = React.useCallback(async (id: string, name: string) => {
+        if (!window.confirm(`确定要永久删除 Topic "${name}" 吗？此操作无法撤销。`)) {
+            return;
+        }
+
+        try {
+            const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const res = await fetch(`${API_BASE}/sources/${id}`, {
+                method: 'DELETE',
+            });
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || `HTTP ${res.status}`);
+            }
+
+            setSources(prev => prev.filter(s => s.id !== id));
+        } catch (err: any) {
+            console.error("Failed to delete source:", err);
+            alert(`删除 Topic 失败: ${err.message || '网络或服务器错误'}`);
+        }
     }, []);
 
     // Sync All Topics Handler
@@ -330,8 +353,22 @@ export default function SettingsPage() {
                                         const isExpanded = expandedConsoles[source.id];
 
                                         return (
-                                            <div key={source.id} className="flex flex-col bg-neutral-900/50 rounded-lg border border-neutral-800 hover:border-neutral-700 transition-all overflow-hidden w-full">
-                                                <div className="flex items-center justify-between p-4 flex-wrap gap-4 min-w-0">
+                                            <div key={source.id} className="flex flex-col bg-neutral-900/50 rounded-lg border border-neutral-800 hover:border-neutral-700 transition-all overflow-hidden w-full relative group">
+                                                {/* Delete Icon in Top-Right Corner */}
+                                                <button
+                                                    onClick={() => handleDeleteSource(source.id, source.display_name)}
+                                                    disabled={isActive}
+                                                    className={clsx(
+                                                        "absolute top-2.5 right-2.5 p-1.5 rounded-lg transition-colors z-10",
+                                                        isActive 
+                                                            ? "text-neutral-600 cursor-not-allowed opacity-30" 
+                                                            : "text-neutral-500 hover:text-red-400 hover:bg-red-500/10 active:scale-95"
+                                                    )}
+                                                    title="永久删除此 Topic"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                                <div className="flex items-center justify-between p-4 pr-11 flex-wrap gap-4 min-w-0">
                                                     {/* 1. Topic & URL */}
                                                     <div className="flex flex-col flex-1 min-w-[200px] overflow-hidden">
                                                         <div className="flex items-center gap-2 mb-1">

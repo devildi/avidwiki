@@ -721,6 +721,46 @@ def add_source(source: SettingsUpdate): # Overloading SettingsUpdate for URL
         raise HTTPException(status_code=500, detail="Failed to add new source")
 
 
+@app.delete("/sources/{source_id}")
+def delete_source(source_id: str):
+    try:
+        from mongo_client import get_db
+        from bson import ObjectId
+        db = get_db()
+
+        query = None
+        doc = None
+        try:
+            query = {"_id": ObjectId(source_id)}
+            doc = db.avid_sources.find_one(query)
+        except Exception:
+            doc = None
+
+        if not doc:
+            query = {"_id": source_id}
+            doc = db.avid_sources.find_one(query)
+
+        if not doc:
+            query = {"url": source_id}
+            doc = db.avid_sources.find_one(query)
+
+        if not doc:
+            raise HTTPException(status_code=404, detail="Source topic not found")
+
+        db.avid_sources.delete_one(query)
+
+        # Delete associated posts from avid collection if source has url
+        if "url" in doc and doc["url"]:
+            db.avid.delete_many({"source_url": doc["url"]})
+
+        return {"status": "success", "message": f"Successfully deleted source topic {source_id}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting source topic: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete topic from database")
+
+
 from fastapi.responses import StreamingResponse
 import json
 import asyncio

@@ -50,13 +50,23 @@ class AvidCrawler:
             self.source_urls = ["https://community.avid.com/forums/398.aspx"]
         
     def setup_driver(self):
-        """Stable Chrome setup with standard headers to avoid detection."""
+        """Stable Chrome setup with standard headers to avoid detection and optimized for minimal memory footprint."""
         options = webdriver.ChromeOptions()
         options.add_argument('--headless')
         options.add_argument('--window-size=1920,1080')
         options.add_argument('--disable-gpu')
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
+        
+        # Memory and caching optimization flags
+        options.add_argument('--disable-application-cache')
+        options.add_argument('--disk-cache-size=10485760')  # Limit disk cache to 10MB
+        options.add_argument('--media-cache-size=10485760') # Limit media cache to 10MB
+        options.add_argument('--disable-extensions')
+        options.add_argument('--disable-background-networking')
+        options.add_argument('--disable-sync')
+        options.add_argument('--disable-translate')
+        options.add_argument('--disable-features=NetworkPrediction,VizDisplayCompositor')
         
         # Standard User-Agent to avoid generic bot blocks
         options.add_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
@@ -75,6 +85,16 @@ class AvidCrawler:
         self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
             "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         })
+
+    def recycle_driver(self):
+        """Safely restart the Chrome WebDriver to reclaim browser memory and purge internal caches."""
+        try:
+            if self.driver:
+                self.driver.quit()
+        except Exception:
+            pass
+        self.driver = None
+        self.setup_driver()
 
     def interruptible_sleep(self, seconds, stop_event=None):
         """Sleep for X seconds, but check stop_event every 0.5s for immediate interruption."""
@@ -133,10 +153,14 @@ class AvidCrawler:
             db = get_db()
             processed_count = 0
 
-            for start_url in self.source_urls:
+            for idx, start_url in enumerate(self.source_urls):
                 if stop_event and stop_event.is_set():
                     log("🛑 Crawl stopped by user.")
                     break
+
+                if idx > 0:
+                    log("♻️ Recycling browser driver for new source to free memory...")
+                    self.recycle_driver()
 
                 log(f"🎬 Starting crawl for source: {start_url}")
                 
@@ -296,6 +320,12 @@ class AvidCrawler:
                         
                         processed_count += 1
                         log(f"Progress update", type="progress", data={"current": processed_count, "total": processed_count + 20})
+
+                        # Periodic memory flush for long-running crawling (recycle browser every 40 items)
+                        if processed_count > 0 and processed_count % 40 == 0:
+                            log("♻️ Recycling browser driver to free memory...")
+                            self.recycle_driver()
+
                         if self.interruptible_sleep(random.uniform(2, 4), stop_event): break
 
                     # 3. Increment Page
@@ -310,7 +340,11 @@ class AvidCrawler:
             log(f"❌ Crawler crashed: {e}")
         finally:
             if self.driver:
-                self.driver.quit()
+                try:
+                    self.driver.quit()
+                except Exception:
+                    pass
+                self.driver = None
 
     def scrape_thread(self, url, title, db, last_post_date_on_list, source_url, stop_event=None):
         if stop_event and stop_event.is_set():

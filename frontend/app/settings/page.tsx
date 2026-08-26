@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { ArrowLeft, RefreshCw, Terminal, XCircle, ChevronDown, ChevronUp, Database, Cloud, HardDrive, Trash2, Clock } from 'lucide-react';
-import Link from 'next/link';
+import { RefreshCw, Terminal, XCircle, ChevronDown, ChevronUp, Database, Cloud, HardDrive, Trash2, Clock } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 import clsx from 'clsx';
 import PDFManager from '../../components/PDFManager';
@@ -21,10 +20,251 @@ interface Progress {
     total: number;
 }
 
+interface LogEntry {
+    id: string;
+    time: string;
+    message: string;
+}
+
+let logCounter = 0;
+const createLogEntry = (message: string): LogEntry => {
+    logCounter = (logCounter + 1) % 1000000;
+    return {
+        id: `${Date.now()}-${logCounter}`,
+        time: new Date().toLocaleTimeString([], { hour12: false }),
+        message
+    };
+};
+
+const MAX_LOGS_PER_SOURCE = 150;
+
+/**
+ * Isolated timer badge component.
+ * Maintains its own 1-second interval state to prevent triggering full page re-renders.
+ */
+interface CrawlerTimerBadgeProps {
+    isCrawling: boolean;
+}
+
+const CrawlerTimerBadge: React.FC<CrawlerTimerBadgeProps> = React.memo(({ isCrawling }) => {
+    const [elapsedSeconds, setElapsedSeconds] = React.useState<number>(0);
+
+    React.useEffect(() => {
+        let interval: NodeJS.Timeout | null = null;
+        if (isCrawling) {
+            const startTime = Date.now();
+            setElapsedSeconds(0);
+            interval = setInterval(() => {
+                setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
+            }, 1000);
+        } else {
+            setElapsedSeconds(0);
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isCrawling]);
+
+    if (!isCrawling) return null;
+
+    const formatTime = (totalSeconds: number) => {
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        const pad = (n: number) => String(n).padStart(2, '0');
+        if (hours > 0) {
+            return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        }
+        return `${pad(minutes)}:${pad(seconds)}`;
+    };
+
+    return (
+        <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-lg bg-neutral-800/90 border border-purple-500/40 text-purple-300 text-xs font-mono shadow-md backdrop-blur-sm">
+            <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+            </span>
+            <Clock size={14} className="text-purple-400 animate-spin" style={{ animationDuration: '6s' }} />
+            <span className="text-neutral-400">运行用时:</span>
+            <span className="font-semibold text-purple-300 text-sm">{formatTime(elapsedSeconds)}</span>
+        </div>
+    );
+});
+CrawlerTimerBadge.displayName = "CrawlerTimerBadge";
+
+/**
+ * Memoized SourceCard component.
+ * Log/progress updates for a specific topic source only re-render its own card.
+ */
+interface SourceCardProps {
+    source: Source;
+    isActive: boolean;
+    progress?: Progress;
+    logs: LogEntry[];
+    isExpanded: boolean;
+    isAnyTaskActive: boolean;
+    onDelete: (id: string, name: string) => void;
+    onCancel: (id: string) => void;
+    onUpdateNow: (id: string) => void;
+    onToggleConsole: (id: string) => void;
+    onClearLogs: (id: string) => void;
+}
+
+const SourceCard: React.FC<SourceCardProps> = React.memo(({
+    source,
+    isActive,
+    progress,
+    logs,
+    isExpanded,
+    isAnyTaskActive,
+    onDelete,
+    onCancel,
+    onUpdateNow,
+    onToggleConsole,
+    onClearLogs
+}) => {
+    return (
+        <div className="flex flex-col bg-neutral-900/50 rounded-lg border border-neutral-800 hover:border-neutral-700 transition-all overflow-hidden w-full relative group">
+            {/* Delete Icon in Top-Right Corner */}
+            <button
+                onClick={() => onDelete(source.id, source.display_name)}
+                disabled={isActive}
+                className={clsx(
+                    "absolute top-2.5 right-2.5 p-1.5 rounded-lg transition-colors z-10",
+                    isActive
+                        ? "text-neutral-600 cursor-not-allowed opacity-30"
+                        : "text-neutral-500 hover:text-red-400 hover:bg-red-500/10 active:scale-95"
+                )}
+                title="永久删除此 Topic"
+            >
+                <Trash2 size={16} />
+            </button>
+
+            <div className="flex items-center justify-between p-4 pr-11 flex-wrap gap-4 min-w-0">
+                {/* 1. Topic & URL */}
+                <div className="flex flex-col flex-1 min-w-[200px] overflow-hidden">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs text-neutral-500 font-medium uppercase tracking-wider shrink-0">Topic</span>
+                        <span className="text-xs text-purple-400 font-mono opacity-50">#{source.id}</span>
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                        <span className="text-neutral-200 font-medium truncate text-base mb-0.5">{source.display_name}</span>
+                        <a
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-blue-400 font-mono truncate hover:text-blue-300 hover:underline transition-colors block w-fit"
+                        >
+                            {source.url}
+                        </a>
+                    </div>
+                </div>
+
+                {/* 2. Last Updated */}
+                <div className="flex flex-col px-4 border-l border-neutral-800">
+                    <span className="text-xs text-neutral-500 font-medium uppercase tracking-wider mb-1">Last Updated</span>
+                    <span className="text-neutral-300 font-mono text-sm whitespace-nowrap">
+                        {isActive ? <span className="text-green-400 animate-pulse">Syncing...</span> : source.last_updated}
+                    </span>
+                </div>
+
+                {/* 3. Controls */}
+                <div className="flex items-center gap-2">
+                    {isActive ? (
+                        <button
+                            onClick={() => onCancel(source.id)}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-900/30 text-red-400 hover:bg-red-900/50 transition-colors text-sm border border-red-900/50"
+                        >
+                            <XCircle size={14} />
+                            Cancel
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => onToggleConsole(source.id)}
+                            className="p-2 rounded-lg bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition-colors"
+                            title="View Logs"
+                        >
+                            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                        </button>
+                    )}
+
+                    <button
+                        onClick={() => onUpdateNow(source.id)}
+                        disabled={isActive || isAnyTaskActive}
+                        className={clsx(
+                            "flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all text-sm shadow-md min-w-[120px]",
+                            (isActive || isAnyTaskActive)
+                                ? "bg-neutral-800 text-neutral-500 cursor-not-allowed border border-neutral-700"
+                                : "bg-purple-600 hover:bg-purple-700 text-white hover:shadow-purple-500/20 active:scale-95"
+                        )}
+                    >
+                        {isActive ? (
+                            <>
+                                <RefreshCw size={14} className="animate-spin text-purple-400" />
+                                <span className="font-mono text-xs">
+                                    {progress?.total ? `${progress.current} / ${progress.total}` : "Loading..."}
+                                </span>
+                            </>
+                        ) : (
+                            <>
+                                <RefreshCw size={14} className="group-hover:rotate-180 transition-transform duration-500" />
+                                Update Now
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+
+            {/* Console Panel */}
+            {isExpanded && (
+                <div className="border-t border-neutral-800 bg-black/40 p-3 font-mono text-[11px] flex flex-col">
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-800/80 text-neutral-500">
+                        <span>Console Output ({logs.length} 条)</span>
+                        {logs.length > 0 && !isActive && (
+                            <button
+                                onClick={() => onClearLogs(source.id)}
+                                className="text-xs text-neutral-500 hover:text-neutral-300 underline transition-colors cursor-pointer"
+                            >
+                                清空日志
+                            </button>
+                        )}
+                    </div>
+                    <div className="h-44 overflow-y-auto scroll-smooth flex flex-col-reverse">
+                        <div className="flex flex-col gap-1">
+                            {logs.length > 0 ? (
+                                logs.map((log) => (
+                                    <div key={log.id} className="flex gap-2">
+                                        <span className="text-neutral-600 shrink-0">[{log.time}]</span>
+                                        <span className={clsx(
+                                            log.message.startsWith('❌') ? "text-red-400" :
+                                                log.message.startsWith('✅') ? "text-green-400" :
+                                                    log.message.startsWith('🚀') ? "text-blue-400" :
+                                                        log.message.startsWith('🎯') ? "text-purple-400" :
+                                                            log.message.startsWith('♻️') ? "text-amber-400" :
+                                                                "text-neutral-400"
+                                        )}>
+                                            {log.message}
+                                        </span>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-neutral-700 italic">No logs yet. Click 'Update Now' to begin.</div>
+                            )}
+                            <div className="h-0" id={`scroll-anchor-${source.id}`}></div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+});
+SourceCard.displayName = "SourceCard";
+
 export default function SettingsPage() {
     const [sources, setSources] = React.useState<Source[]>([]);
     const [activeTasks, setActiveTasks] = React.useState<Record<string, boolean>>({});
-    const [taskLogs, setTaskLogs] = React.useState<Record<string, string[]>>({});
+    const [taskLogs, setTaskLogs] = React.useState<Record<string, LogEntry[]>>({});
     const [taskProgress, setTaskProgress] = React.useState<Record<string, Progress>>({});
     const [expandedConsoles, setExpandedConsoles] = React.useState<Record<string, boolean>>({});
     const [error, setError] = React.useState<string | null>(null);
@@ -66,7 +306,6 @@ export default function SettingsPage() {
         if (saved === 'local' || saved === 'deepseek') {
             setLlmProvider(saved);
         } else if (saved === 'cloud' || saved === 'null' || saved === null) {
-            // If saved provider is cloud (OpenAI/disabled) or explicitly none, set to null
             setLlmProvider(null);
             localStorage.setItem('llm_provider', 'null');
         }
@@ -74,7 +313,6 @@ export default function SettingsPage() {
 
     // Save LLM provider preference to localStorage when changed
     const handleProviderChange = (provider: LLMProvider) => {
-        // If clicking the same provider, toggle it off (set to null)
         if (llmProvider === provider) {
             setLlmProvider(null);
             localStorage.setItem('llm_provider', 'null');
@@ -86,53 +324,34 @@ export default function SettingsPage() {
 
     const eventSourcesRef = React.useRef<Record<string, EventSource>>({});
 
-    // Crawler timer logic
-    const isCrawling = Object.values(activeTasks).some(v => v) || syncQueue.length > 0;
-    const [crawlStartTime, setCrawlStartTime] = React.useState<number | null>(null);
-    const [elapsedSeconds, setElapsedSeconds] = React.useState<number>(0);
+    const isAnyTaskActive = React.useMemo(() => {
+        return Object.values(activeTasks).some(v => v);
+    }, [activeTasks]);
 
+    const isCrawling = isAnyTaskActive || syncQueue.length > 0;
+
+    // Helper to safely close an EventSource connection
+    const closeEventSource = React.useCallback((id: string) => {
+        if (eventSourcesRef.current[id]) {
+            try {
+                eventSourcesRef.current[id].close();
+            } catch (err) {
+                console.error("Error closing EventSource:", err);
+            }
+            delete eventSourcesRef.current[id];
+        }
+    }, []);
+
+    // Clean up all EventSource connections on unmount
     React.useEffect(() => {
-        let interval: NodeJS.Timeout | null = null;
-        if (isCrawling) {
-            setCrawlStartTime(prev => {
-                const now = Date.now();
-                const start = prev || now;
-                setElapsedSeconds(Math.floor((now - start) / 1000));
-                return start;
+        return () => {
+            Object.values(eventSourcesRef.current).forEach(es => {
+                try {
+                    es?.close();
+                } catch {
+                    // Ignore unmount close errors
+                }
             });
-            interval = setInterval(() => {
-                setCrawlStartTime(prevStart => {
-                    if (prevStart) {
-                        setElapsedSeconds(Math.floor((Date.now() - prevStart) / 1000));
-                    }
-                    return prevStart;
-                });
-            }, 1000);
-        } else {
-            setCrawlStartTime(null);
-            setElapsedSeconds(0);
-        }
-
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [isCrawling]);
-
-    const formatTime = (totalSeconds: number) => {
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-        const pad = (n: number) => String(n).padStart(2, '0');
-        if (hours > 0) {
-            return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-        }
-        return `${pad(minutes)}:${pad(seconds)}`;
-    };
-
-    // Clean up EventSource connections on unmount
-    React.useEffect(() => {
-        return () => {
-            Object.values(eventSourcesRef.current).forEach(es => es?.close());
             eventSourcesRef.current = {};
         };
     }, []);
@@ -141,13 +360,10 @@ export default function SettingsPage() {
         if (activeTasks[id]) return;
 
         // Close any existing connection for this ID
-        if (eventSourcesRef.current[id]) {
-            eventSourcesRef.current[id].close();
-            delete eventSourcesRef.current[id];
-        }
+        closeEventSource(id);
 
         // Reset logs and progress for this ID
-        setTaskLogs(prev => ({ ...prev, [id]: ["🚀 Initializing SSE connection..."] }));
+        setTaskLogs(prev => ({ ...prev, [id]: [createLogEntry("🚀 Initializing SSE connection...")] }));
         setTaskProgress(prev => ({ ...prev, [id]: { current: 0, total: 0 } }));
         setActiveTasks(prev => ({ ...prev, [id]: true }));
         setExpandedConsoles(prev => ({ ...prev, [id]: true }));
@@ -160,67 +376,67 @@ export default function SettingsPage() {
             const es = new EventSource(`${API_BASE}/crawler/logs/${id}`);
             eventSourcesRef.current[id] = es;
 
-            const MAX_LOGS = 200; // Limit max log items kept in state to prevent RAM overflow
-
             es.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'log') {
-                    setTaskLogs(prev => {
-                        const logs = prev[id] || [];
-                        const nextLogs = [...logs, data.message];
-                        return {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'log') {
+                        const newEntry = createLogEntry(data.message);
+                        setTaskLogs(prev => {
+                            const logs = prev[id] || [];
+                            const nextLogs = [...logs, newEntry];
+                            return {
+                                ...prev,
+                                [id]: nextLogs.length > MAX_LOGS_PER_SOURCE ? nextLogs.slice(nextLogs.length - MAX_LOGS_PER_SOURCE) : nextLogs
+                            };
+                        });
+                    } else if (data.type === 'progress') {
+                        setTaskProgress(prev => ({
                             ...prev,
-                            [id]: nextLogs.length > MAX_LOGS ? nextLogs.slice(nextLogs.length - MAX_LOGS) : nextLogs
-                        };
-                    });
-                } else if (data.type === 'progress') {
-                    setTaskProgress(prev => ({
-                        ...prev,
-                        [id]: { current: data.current, total: data.total }
-                    }));
-                } else if (data.type === 'status') {
-                    if (data.message === 'finished' || data.message === 'error') {
-                        es.close();
-                        delete eventSourcesRef.current[id];
-                        setActiveTasks(prev => ({ ...prev, [id]: false }));
-                        fetchSources(); // Refresh timestamps
+                            [id]: { current: data.current, total: data.total }
+                        }));
+                    } else if (data.type === 'status') {
+                        if (data.message === 'finished' || data.message === 'error' || data.message === 'cancelled') {
+                            closeEventSource(id);
+                            setActiveTasks(prev => ({ ...prev, [id]: false }));
+                            fetchSources(); // Refresh timestamps
+                        }
                     }
+                } catch (parseErr) {
+                    console.error("SSE parse error:", parseErr);
                 }
             };
 
             es.onerror = () => {
+                const errorEntry = createLogEntry("❌ SSE connection lost.");
                 setTaskLogs(prev => {
                     const logs = prev[id] || [];
-                    const nextLogs = [...logs, "❌ SSE connection lost."];
+                    const nextLogs = [...logs, errorEntry];
                     return {
                         ...prev,
-                        [id]: nextLogs.length > MAX_LOGS ? nextLogs.slice(nextLogs.length - MAX_LOGS) : nextLogs
+                        [id]: nextLogs.length > MAX_LOGS_PER_SOURCE ? nextLogs.slice(nextLogs.length - MAX_LOGS_PER_SOURCE) : nextLogs
                     };
                 });
-                es.close();
-                delete eventSourcesRef.current[id];
+                closeEventSource(id);
                 setActiveTasks(prev => ({ ...prev, [id]: false }));
             };
 
         } catch (err) {
             console.error("Failed to start crawler:", err);
-            setTaskLogs(prev => ({ ...prev, [id]: ["❌ Failed to start crawler API call."] }));
+            setTaskLogs(prev => ({ ...prev, [id]: [createLogEntry("❌ Failed to start crawler API call.")] }));
             setActiveTasks(prev => ({ ...prev, [id]: false }));
+            closeEventSource(id);
         }
-    }, [activeTasks, fetchSources]);
+    }, [activeTasks, fetchSources, closeEventSource]);
 
     const handleCancel = React.useCallback(async (id: string) => {
         // Immediately reset active UI state for instant user feedback
         setActiveTasks(prev => ({ ...prev, [id]: false }));
         setTaskLogs(prev => {
             const current = prev[id] || [];
-            return { ...prev, [id]: [...current, "🛑 Task cancelled by user."] };
+            return { ...prev, [id]: [...current, createLogEntry("🛑 Task cancelled by user.")] };
         });
 
-        if (eventSourcesRef.current[id]) {
-            eventSourcesRef.current[id].close();
-            delete eventSourcesRef.current[id];
-        }
+        closeEventSource(id);
 
         try {
             const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -228,10 +444,18 @@ export default function SettingsPage() {
         } catch (err) {
             console.error("Failed to stop crawler:", err);
         }
-    }, []);
+    }, [closeEventSource]);
 
     const toggleConsole = React.useCallback((id: string) => {
         setExpandedConsoles(prev => ({ ...prev, [id]: !prev[id] }));
+    }, []);
+
+    const handleClearLogs = React.useCallback((id: string) => {
+        setTaskLogs(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
     }, []);
 
     const handleDeleteSource = React.useCallback(async (id: string, name: string) => {
@@ -251,23 +475,22 @@ export default function SettingsPage() {
             }
 
             setSources(prev => prev.filter(s => s.id !== id));
+            handleClearLogs(id);
         } catch (err: any) {
             console.error("Failed to delete source:", err);
             alert(`删除 Topic 失败: ${err.message || '网络或服务器错误'}`);
         }
-    }, []);
+    }, [handleClearLogs]);
 
-    // Sync All Topics Handler
+    // Sync All Topics Queue Logic
     const queueTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
-    // Sync All Topics Handler
     const handleSyncAll = React.useCallback(() => {
         if (sources.length === 0) return;
         const ids = sources.map(s => s.id);
         setSyncQueue(ids);
     }, [sources]);
 
-    // Cancel Sync All Handler
     const handleCancelSyncAll = React.useCallback(() => {
         setSyncQueue([]);
         if (queueTimerRef.current) {
@@ -284,18 +507,16 @@ export default function SettingsPage() {
 
     // Sequential Crawler Queue Effect
     React.useEffect(() => {
-        const isAnyTaskActive = Object.values(activeTasks).some(v => v);
-        
         if (syncQueue.length > 0 && !isAnyTaskActive && !queueTimerRef.current) {
             const nextId = syncQueue[0];
             setSyncQueue(prev => prev.slice(1));
-            
+
             queueTimerRef.current = setTimeout(() => {
                 queueTimerRef.current = null;
                 handleUpdateNow(nextId);
             }, 500);
         }
-    }, [syncQueue, activeTasks, handleUpdateNow]);
+    }, [syncQueue, isAnyTaskActive, handleUpdateNow]);
 
     // Clear timer on unmount
     React.useEffect(() => {
@@ -366,7 +587,7 @@ export default function SettingsPage() {
                     <div className="flex gap-2">
                         <button
                             onClick={() => setActiveTab('sources')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === 'sources'
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors cursor-pointer ${activeTab === 'sources'
                                 ? 'bg-purple-600 text-white'
                                 : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                                 }`}
@@ -376,7 +597,7 @@ export default function SettingsPage() {
                         </button>
                         <button
                             onClick={() => setActiveTab('documents')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === 'documents'
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors cursor-pointer ${activeTab === 'documents'
                                 ? 'bg-purple-600 text-white'
                                 : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                                 }`}
@@ -386,18 +607,8 @@ export default function SettingsPage() {
                         </button>
                     </div>
 
-                    {/* Timer displayed on the right when crawler is running */}
-                    {isCrawling && (
-                        <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-lg bg-neutral-800/90 border border-purple-500/40 text-purple-300 text-xs font-mono shadow-md backdrop-blur-sm">
-                            <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
-                            </span>
-                            <Clock size={14} className="text-purple-400 animate-spin" style={{ animationDuration: '6s' }} />
-                            <span className="text-neutral-400">运行用时:</span>
-                            <span className="font-semibold text-purple-300 text-sm">{formatTime(elapsedSeconds)}</span>
-                        </div>
-                    )}
+                    {/* Isolated Timer Badge */}
+                    <CrawlerTimerBadge isCrawling={isCrawling} />
                 </div>
 
                 {/* Tab Content */}
@@ -408,24 +619,24 @@ export default function SettingsPage() {
                             <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
                                 <div className="flex items-center gap-2">
                                     <h2 className="text-lg font-semibold text-purple-400">Data Source Management</h2>
-                                    {(Object.values(activeTasks).some(v => v) || syncQueue.length > 0) && (
+                                    {isCrawling && (
                                         <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
                                     )}
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    {syncQueue.length > 0 || Object.values(activeTasks).some(v => v) ? (
+                                    {syncQueue.length > 0 || isAnyTaskActive ? (
                                         <button
                                             onClick={handleCancelSyncAll}
-                                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-950/40 text-red-400 hover:bg-red-900/40 transition-all text-xs border border-red-900/30"
+                                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-950/40 text-red-400 hover:bg-red-900/40 transition-all text-xs border border-red-900/30 cursor-pointer"
                                         >
                                             <XCircle size={12} />
-                                            Stop Sync ({syncQueue.length + (Object.values(activeTasks).some(v => v) ? 1 : 0)} left)
+                                            Stop Sync ({syncQueue.length + (isAnyTaskActive ? 1 : 0)} left)
                                         </button>
                                     ) : (
                                         <button
                                             onClick={handleSyncAll}
                                             disabled={sources.length === 0 || loading}
-                                            className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-all text-xs shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-all text-xs shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                         >
                                             <RefreshCw size={12} className="animate-none hover:rotate-180 transition-transform duration-500" />
                                             Sync All Topics
@@ -448,132 +659,22 @@ export default function SettingsPage() {
                                         No data sources configured.
                                     </div>
                                 ) : (
-                                    sources.map(source => {
-                                        const isActive = activeTasks[source.id];
-                                        const progress = taskProgress[source.id];
-                                        const logs = taskLogs[source.id] || [];
-                                        const isExpanded = expandedConsoles[source.id];
-
-                                        return (
-                                            <div key={source.id} className="flex flex-col bg-neutral-900/50 rounded-lg border border-neutral-800 hover:border-neutral-700 transition-all overflow-hidden w-full relative group">
-                                                {/* Delete Icon in Top-Right Corner */}
-                                                <button
-                                                    onClick={() => handleDeleteSource(source.id, source.display_name)}
-                                                    disabled={isActive}
-                                                    className={clsx(
-                                                        "absolute top-2.5 right-2.5 p-1.5 rounded-lg transition-colors z-10",
-                                                        isActive 
-                                                            ? "text-neutral-600 cursor-not-allowed opacity-30" 
-                                                            : "text-neutral-500 hover:text-red-400 hover:bg-red-500/10 active:scale-95"
-                                                    )}
-                                                    title="永久删除此 Topic"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                                <div className="flex items-center justify-between p-4 pr-11 flex-wrap gap-4 min-w-0">
-                                                    {/* 1. Topic & URL */}
-                                                    <div className="flex flex-col flex-1 min-w-[200px] overflow-hidden">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <span className="text-xs text-neutral-500 font-medium uppercase tracking-wider shrink-0">Topic</span>
-                                                            <span className="text-xs text-purple-400 font-mono opacity-50">#{source.id}</span>
-                                                        </div>
-                                                        <div className="flex flex-col min-w-0">
-                                                            <span className="text-neutral-200 font-medium truncate text-base mb-0.5">{source.display_name}</span>
-                                                            <a 
-                                                                href={source.url} 
-                                                                target="_blank" 
-                                                                rel="noopener noreferrer" 
-                                                                className="text-[11px] text-blue-400 font-mono truncate hover:text-blue-300 hover:underline transition-colors block w-fit"
-                                                            >
-                                                                {source.url}
-                                                            </a>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* 2. Last Updated */}
-                                                    <div className="flex flex-col px-4 border-l border-neutral-800">
-                                                        <span className="text-xs text-neutral-500 font-medium uppercase tracking-wider mb-1">Last Updated</span>
-                                                        <span className="text-neutral-300 font-mono text-sm whitespace-nowrap">
-                                                            {isActive ? <span className="text-green-400 animate-pulse">Syncing...</span> : source.last_updated}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* 3. Controls */}
-                                                    <div className="flex items-center gap-2">
-                                                        {isActive ? (
-                                                            <button
-                                                                onClick={() => handleCancel(source.id)}
-                                                                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-900/30 text-red-400 hover:bg-red-900/50 transition-colors text-sm border border-red-900/50"
-                                                            >
-                                                                <XCircle size={14} />
-                                                                Cancel
-                                                            </button>
-                                                        ) : (
-                                                            <button
-                                                                onClick={() => toggleConsole(source.id)}
-                                                                className="p-2 rounded-lg bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition-colors"
-                                                                title="View Logs"
-                                                            >
-                                                                {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                                                            </button>
-                                                        )}
-
-                                                        <button
-                                                            onClick={() => handleUpdateNow(source.id)}
-                                                            disabled={isActive || Object.values(activeTasks).some(v => v)}
-                                                            className={clsx(
-                                                                "flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all text-sm shadow-md min-w-[120px]",
-                                                                (isActive || Object.values(activeTasks).some(v => v))
-                                                                    ? "bg-neutral-800 text-neutral-500 cursor-not-allowed border border-neutral-700"
-                                                                    : "bg-purple-600 hover:bg-purple-700 text-white hover:shadow-purple-500/20 active:scale-95"
-                                                            )}
-                                                        >
-                                                            {isActive ? (
-                                                                <>
-                                                                    <RefreshCw size={14} className="animate-spin text-purple-400" />
-                                                                    <span className="font-mono text-xs">
-                                                                        {progress?.total ? `${progress.current} / ${progress.total}` : "Loading..."}
-                                                                    </span>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <RefreshCw size={14} className="group-hover:rotate-180 transition-transform duration-500" />
-                                                                    Update Now
-                                                                </>
-                                                            )}
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Console Panel */}
-                                                {isExpanded && (
-                                                    <div className="border-t border-neutral-800 bg-black/40 p-3 font-mono text-[11px] h-48 overflow-y-auto scroll-smooth flex flex-col-reverse">
-                                                        <div className="flex flex-col gap-1">
-                                                            {logs.length > 0 ? (
-                                                                logs.map((log, idx) => (
-                                                                    <div key={idx} className="flex gap-2">
-                                                                        <span className="text-neutral-600 shrink-0">[{new Date().toLocaleTimeString([], { hour12: false })}]</span>
-                                                                        <span className={clsx(
-                                                                            log.startsWith('❌') ? "text-red-400" :
-                                                                                log.startsWith('✅') ? "text-green-400" :
-                                                                                    log.startsWith('🚀') ? "text-blue-400" :
-                                                                                        log.startsWith('🎯') ? "text-purple-400" :
-                                                                                            "text-neutral-400"
-                                                                        )}>
-                                                                            {log}
-                                                                        </span>
-                                                                    </div>
-                                                                ))
-                                                            ) : (
-                                                                <div className="text-neutral-700 italic">No logs yet. Click 'Update Now' to begin.</div>
-                                                            )}
-                                                            <div className="h-0" id={`scroll-anchor-${source.id}`}></div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })
+                                    sources.map(source => (
+                                        <SourceCard
+                                            key={source.id}
+                                            source={source}
+                                            isActive={!!activeTasks[source.id]}
+                                            progress={taskProgress[source.id]}
+                                            logs={taskLogs[source.id] || []}
+                                            isExpanded={!!expandedConsoles[source.id]}
+                                            isAnyTaskActive={isAnyTaskActive}
+                                            onDelete={handleDeleteSource}
+                                            onCancel={handleCancel}
+                                            onUpdateNow={handleUpdateNow}
+                                            onToggleConsole={toggleConsole}
+                                            onClearLogs={handleClearLogs}
+                                        />
+                                    ))
                                 )}
                             </div>
                         </div>
@@ -595,7 +696,7 @@ export default function SettingsPage() {
                                     <button
                                         onClick={() => handleProviderChange('local')}
                                         className={clsx(
-                                            "flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all",
+                                            "flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all cursor-pointer",
                                             llmProvider === 'local'
                                                 ? "border-purple-500 bg-purple-500/20 text-purple-300"
                                                 : "border-neutral-700 bg-neutral-900/50 text-neutral-500 hover:border-neutral-600"
@@ -607,7 +708,7 @@ export default function SettingsPage() {
                                     <button
                                         onClick={() => handleProviderChange('deepseek')}
                                         className={clsx(
-                                            "flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all",
+                                            "flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all cursor-pointer",
                                             llmProvider === 'deepseek'
                                                 ? "border-purple-500 bg-purple-500/20 text-purple-300"
                                                 : "border-neutral-700 bg-neutral-900/50 text-neutral-500 hover:border-neutral-600"
@@ -704,7 +805,7 @@ export default function SettingsPage() {
                             </div>
                         </div>
 
-                        {/* 新增：数据来源设置 */}
+                        {/* 数据来源设置 */}
                         <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 shadow-lg">
                             <h2 className="text-lg font-semibold mb-2 text-purple-400 flex items-center gap-2">
                                 <Database size={20} />
